@@ -1,8 +1,6 @@
 import os
 from tqdm import tqdm
-import pickle
 import random
-import matplotlib.pyplot as plt
 import argparse
 import numpy as np
 import shutil
@@ -45,7 +43,6 @@ class CocoCustomizeExcept:
         Remove the class except collect_class_list in total dataset.
         Then, save that imgs and labels.
         """
-        num = 0
         for file in tqdm(self.file_list):
             after_remove_list = self.class_removal(
                 file, collect_class_list
@@ -63,13 +60,16 @@ class CocoCustomizeExcept:
                     labels_list = [
                         i for i in after_remove_list if int(i.split()[0]) == obj
                     ]
+                    dir = f"data/class{obj}/labels/"
+                    create_dir(dir)
                     with open(
-                        os.path.join(args.root, f"data/class{obj}/labels/{file}"), "w+"
+                        os.path.join(args.root, f"{dir}{file}"), "w+"
                     ) as f:
                         for j in labels_list:
                             f.write(j)
                             f.write("\n")
                     img_path = os.path.join(args.root, f"data/class{obj}/images/")
+                    create_dir(img_path)
                     img_name = file.split(".")[0] + ".jpg"
                     shutil.copy(
                         args.data_path + f"images/train2017/{img_name}", img_path
@@ -92,6 +92,14 @@ class CocoCustomizeExcept:
         return obj_remov_list
 
 
+def create_dir(directory):
+    try:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+    except OSError:
+        print('Error: Creating directory.'+ directory)
+
+
 def main(args):
 
     train_data = CocoCustomizeExcept(args.data_path, "labels/train2017")
@@ -106,7 +114,7 @@ if __name__ == "__main__":
         "--root",
         help="save root",
         type=str,
-        default="/home/phj/object-detection-federated-learning/",
+        default="./",
     )
     parser.add_argument("--data_path", type=str, default="/hdd/hdd3/coco/")
     args = parser.parse_args()
