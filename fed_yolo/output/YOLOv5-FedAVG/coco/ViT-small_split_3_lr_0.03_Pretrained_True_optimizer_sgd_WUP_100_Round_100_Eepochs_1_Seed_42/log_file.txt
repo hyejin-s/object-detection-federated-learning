@@ -1,0 +1,44 @@
+================ FL train of YOLOv5-FedAVG with total model parameters: 7.2M  ================
+++++++++++++++++ Other Train related parameters ++++++++++++++++ 
+                  E_epoch: 1                             
+              FL_platform: YOLOv5-FedAVG                 
+               Pretrained: True                          
+               batch_size: 32                            
+                      cfg: configs/swin_tiny_patch4_window7_224.yaml
+                data_conf: data/coco.yaml                
+                data_path: ./data/                       
+                  dataset: coco                          
+               decay_type: cosine                        
+                   device: cuda:2                        
+                  gpu_ids: 2                             
+                grad_clip: True                          
+                      hyp: {'lr0': 0.01, 'lrf': 0.01, 'momentum': 0.937, 'weight_decay': 0.0005, 'warmup_epochs': 3.0, 'warmup_momentum': 0.8, 'warmup_bias_lr': 0.1, 'box': 0.05, 'cls': 0.5, 'cls_pw': 1.0, 'obj': 1.0, 'obj_pw': 1.0, 'iou_t': 0.2, 'anchor_t': 4.0, 'fl_gamma': 0.0, 'hsv_h': 0.015, 'hsv_s': 0.7, 'hsv_v': 0.4, 'degrees': 0.0, 'translate': 0.1, 'scale': 0.5, 'shear': 0.0, 'perspective': 0.0, 'flipud': 0.0, 'fliplr': 0.5, 'mosaic': 1.0, 'mixup': 0.0, 'copy_paste': 0.0}
+                 img_size: 224                           
+            img_size_list: [640, 640]                    
+            learning_rate: 0.03                          
+ max_communication_rounds: 100                           
+            max_grad_norm: 1.0                           
+             model_stride: tensor([ 8., 16., 32.])       
+                     name: ViT-small_split_3_lr_0.03_Pretrained_True_optimizer_sgd_WUP_100_Round_100_Eepochs_1_Seed_42
+                       nc: 80                            
+                 net_name: ViT-small                     
+              num_classes: 2                             
+        num_local_clients: -1                            
+              num_workers: 4                             
+           optimizer_type: sgd                           
+               output_dir: output/YOLOv5-FedAVG/coco/ViT-small_split_3_lr_0.03_Pretrained_True_optimizer_sgd_WUP_100_Round_100_Eepochs_1_Seed_42
+           pretrained_dir: checkpoint/swin_tiny_patch4_window7_224.pth
+          save_model_flag: False                         
+                     seed: 42                            
+                  shuffle: False                         
+               split_type: split_3                       
+                step_size: 30                            
+         total_batch_size: 32                            
+                    wandb: <module 'wandb' from '/home/phj/.conda/envs/lge-fl/lib/python3.7/site-packages/wandb/__init__.py'>
+             warmup_steps: 100                           
+             weight_decay: 0                             
+                  weights: fedmodels/yolov5s.pt          
+                  yolo_bs: 32                            
+                 yolo_cfg:                               
+                 yolo_hyp: data/hyps/hyp.scratch-low.yaml
+++++++++++++++++  End of show parameters ++++++++++++++++ 
