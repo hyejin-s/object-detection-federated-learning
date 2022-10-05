@@ -34,7 +34,7 @@ from .augmentations import (
     mixup,
     random_perspective,
 )
-from general import (
+from .general import (
     DATASETS_DIR,
     LOGGER,
     NUM_THREADS,
@@ -51,7 +51,7 @@ from general import (
     xywhn2xyxy,
     xyxy2xywhn,
 )
-from torch_utils import torch_distributed_zero_first
+from .torch_utils import torch_distributed_zero_first
 
 # Parameters
 HELP_URL = "https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data"

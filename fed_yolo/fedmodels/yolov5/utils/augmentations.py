@@ -9,12 +9,8 @@ import random
 import cv2
 import numpy as np
 
-import sys
-import os
-sys.path.append("/home/phj/FedML/python/app/fedcv/object_detection/model/yolov5/utils")
-
-from general import LOGGER, check_version, colorstr, resample_segments, segment2box
-from metrics import bbox_ioa
+from .general import LOGGER, check_version, colorstr, resample_segments, segment2box
+from .metrics import bbox_ioa
 
 
 class Albumentations:

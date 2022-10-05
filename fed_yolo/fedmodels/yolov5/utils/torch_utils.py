@@ -18,11 +18,7 @@ import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
 
-import sys
-import os
-sys.path.append("/home/phj/FedML/python/app/fedcv/object_detection/model/yolov5/utils")
-
-from general import LOGGER, file_date, git_describe
+from .general import LOGGER, file_date, git_describe
 
 try:
     import thop  # for FLOPs computation

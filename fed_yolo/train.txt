@@ -1,0 +1,6 @@
+python train_CWT.py --FL_platform ViT-CWT --net_name ViT-small --dataset cifar10 --E_epoch 1 --max_communication_rounds 100 --split_type split_2 --save_model_flag
+python train_CWT.py --FL_platform ViT-CWT --net_name ViT-small --dataset CelebA --E_epoch 1 --max_communication_rounds 30 --split_type real
+python train_FedAVG.py --FL_platform ViT-FedAVG --net_name ViT-small --dataset cifar10 --E_epoch 1 --max_communication_rounds 10 --num_local_clients -1 --split_type split_2 --save_model_flag
+python train_FedAVG.py --FL_platform ViT-FedAVG --net_name ViT-small --dataset CelebA --E_epoch 1 --max_communication_rounds 30 --num_local_clients 10 --split_type real
+
+python train_FedAVG.py  0 --E_epoch 1 --max_communication_rounds 10 --num_local_clients -1 --split_type split_2 --save_model_flag
