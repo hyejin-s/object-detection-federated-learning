@@ -9,7 +9,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 import torch
 
 from fedutils.scheduler import setup_scheduler
-
+from fedmodels.yolov5.utils.loss import ComputeLoss
 
 ## for optimizaer
 
@@ -101,6 +101,7 @@ def save_model(args, model):
 
 def inner_valid(args, model, test_loader):
     eval_losses = AverageMeter()
+    compute_loss = ComputeLoss(model) 
 
     print("++++++ Running Validation of client", args.single_client, "++++++")
     model.eval()
@@ -108,19 +109,18 @@ def inner_valid(args, model, test_loader):
 
     loss_fct = torch.nn.CrossEntropyLoss()
     for step, batch in enumerate(test_loader):
-        batch = tuple(t.to(args.device) for t in batch)
-        x, y = batch
+        # batch = tuple(t.to(args.device) for t in batch)
+        x, y = batch[0].float().to(args.device), batch[1].float().to(args.device)
         with torch.no_grad():
             logits = model(x)
 
             if args.num_classes > 1:
-                eval_loss = loss_fct(logits, y)
+                eval_loss, loss_items = compute_loss(logits, y)
                 eval_losses.update(eval_loss.item())
 
             if args.num_classes > 1:
                 preds = torch.argmax(logits, dim=-1)
             else:
-
                 preds = logits
 
         if len(all_preds) == 0:
@@ -157,9 +157,9 @@ def metric_evaluation(args, eval_result):
             Flag = False
     return Flag
 
-def valid(args, model, val_loader,  test_loader = None, TestFlag = False):
+def valid(args, model, test_loader = None, TestFlag = False):
     # Validation!
-    eval_result, eval_losses = inner_valid(args, model, val_loader)
+    eval_result, eval_losses = inner_valid(args, model, test_loader)
 
     print("Valid Loss: %2.5f" % eval_losses.avg, "Valid metric: %2.5f" % eval_result)
     if args.dataset == 'CelebA':

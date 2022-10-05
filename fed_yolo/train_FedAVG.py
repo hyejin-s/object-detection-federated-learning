@@ -5,12 +5,15 @@ import os
 import argparse
 import numpy as np
 from copy import deepcopy
+import yaml
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
  
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
+from fedmodels.yolov5.utils.loss import ComputeLoss
+import fedmodels.yolov5.val as validate
 from fedutils.data_utils import DatasetFLViT, create_dataset_and_evalmetrix
 from fedutils.util import Partial_Client_Selection, valid, average_model
 from fedutils.start_config import initization_configure
@@ -20,20 +23,8 @@ def train(args, model):
     os.makedirs(args.output_dir, exist_ok=True)
     writer = SummaryWriter(log_dir=os.path.join(args.output_dir, "logs"))
 
-
     # Prepare dataset
-    create_dataset_and_evalmetrix(args)
-
-    testset = DatasetFLViT(args, phase = 'test' )
-    # test_loader = DataLoader(testset, sampler=SequentialSampler(testset), batch_size=args.batch_size, num_workers=args.num_workers)
-    test_loader = DataLoader(testset, sampler=SequentialSampler(testset), batch_size=args.batch_size, num_workers=8)
-
-    # if not CelebA then get the union val dataset,
-    if not args.dataset == 'CelebA':
-        valset = DatasetFLViT(args, phase = 'val' )
-        # val_loader = DataLoader(valset, sampler=SequentialSampler(valset), batch_size=args.batch_size, num_workers=args.num_workers)
-        val_loader = DataLoader(valset, sampler=SequentialSampler(valset), batch_size=args.batch_size, num_workers=8)
-
+    create_dataset_and_evalmetrix(args, model)
 
     # Configuration for FedAVG, prepare model, optimizer, scheduler
     model_all, optimizer_all, scheduler_all = Partial_Client_Selection(args, model)
@@ -46,6 +37,10 @@ def train(args, model):
     epoch = -1
     # For debug
     # print(args.t_total)
+    compute_loss = ComputeLoss(model)
+
+    with open(args.data_conf) as f:
+        data_dict = yaml.load(f, Loader=yaml.FullLoader)  # data dict
 
     while True:
         epoch += 1
@@ -61,22 +56,13 @@ def train(args, model):
         for client in cur_selected_clients:
             cur_tot_client_Lens += args.clients_with_len[client]
 
-        val_loader_proxy_clients = {}
+        # val_loader_proxy_clients = {}
 
         for cur_single_client, proxy_single_client in zip(cur_selected_clients, args.proxy_clients):
             args.single_client = cur_single_client
             args.clients_weightes[proxy_single_client] = args.clients_with_len[cur_single_client] / cur_tot_client_Lens
 
-            trainset = DatasetFLViT(args, phase='train')
-            train_loader = DataLoader(trainset, sampler=RandomSampler(trainset), batch_size=args.batch_size, num_workers=args.num_workers)
-            if args.dataset == 'CelebA':
-                valset = DatasetFLViT(args, phase='val')
-                val_loader_proxy_clients[proxy_single_client] = DataLoader(valset, sampler=SequentialSampler(valset), batch_size=args.batch_size,
-                                          num_workers=args.num_workers)
-            else:
-                # for Retina and Cifar10 datasets we use union validation dataset
-                val_loader_proxy_clients[proxy_single_client] = val_loader
-
+            train_loader = args.train_data_loader_dict[proxy_single_client]
 
             model = model_all[proxy_single_client]
             model = model.to(args.device).train()
@@ -90,25 +76,30 @@ def train(args, model):
             for inner_epoch in range(args.E_epoch):
                 for step, batch in enumerate(train_loader):  # batch = tuple(t.to(args.device) for t in batch)
                     args.global_step_per_client[proxy_single_client] += 1
-                    batch = tuple(t.to(args.device) for t in batch)
+                    # import pdb; pdb.set_trace()
+                    # batch = tuple(t.to(args.device) for t in batch)
 
-                    x, y = batch
-                    predict = model(x)
-                    loss = loss_fct(predict.view(-1, args.num_classes), y.view(-1))
+                    x, y = batch[0].float().to(args.device), batch[1].float().to(args.device)
+                    pred = model(x)
+
+                    # import pdb; pdb.set_trace()
+
+                    loss, loss_items = compute_loss(pred, y)  # loss scaled by batch_size
+                    # loss = loss_fct(predict.view(-1, args.num_classes), y.view(-1))
 
                     loss.backward()
 
                     if args.grad_clip:
                         torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
-                    if not args.decay_type == 'step':
-                        scheduler.step()
                     optimizer.step()
                     optimizer.zero_grad()
+                    if not args.decay_type == 'step':
+                        scheduler.step()
 
-                    writer.add_scalar(proxy_single_client + '/lr', scalar_value=optimizer.param_groups[0]['lr'],
+                    writer.add_scalar(str(proxy_single_client) + '/lr', scalar_value=optimizer.param_groups[0]['lr'],
                                       global_step=args.global_step_per_client[proxy_single_client])
-                    writer.add_scalar(proxy_single_client + '/loss', scalar_value=loss.item(),
+                    writer.add_scalar(str(proxy_single_client) + '/loss', scalar_value=loss.item(),
                                       global_step=args.global_step_per_client[proxy_single_client])
 
 
@@ -119,19 +110,30 @@ def train(args, model):
                               args.max_communication_rounds, 'loss', loss.item(), 'lr', optimizer.param_groups[0]['lr'])
 
             # we use frequent transfer of model between GPU and CPU due to limitation of GPU memory
-            model.to('cpu')
+            # model.to('cpu')
 
         ## ---- model average and eval
 
         # average model
         average_model(args, model_avg, model_all)
         # then evaluate
+        results = np.zeros((args.client_num_in_total, 7)) # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
+
         for cur_single_client, proxy_single_client in zip(cur_selected_clients, args.proxy_clients):
             args.single_client = cur_single_client
             model = model_all[proxy_single_client]
             model.to(args.device)
-            valid(args, model, val_loader_proxy_clients[proxy_single_client], test_loader, TestFlag=True)
-            model.cpu()
+            results[proxy_single_client], maps, _ = validate.run(data_dict,
+                                            batch_size=args.batch_size,
+                                            imgsz=args.img_size,
+                                            half=True,
+                                            model=model,
+                                            single_cls=False,
+                                            dataloader=args.test_data_loader_dict[proxy_single_client],
+                                            plots=False,
+                                            compute_loss=compute_loss)
+            # valid(args, model, args.test_data_loader_dict[proxy_single_client], TestFlag=True)
+            # model.cpu()
 
         args.record_val_acc = args.record_val_acc.append(args.current_acc, ignore_index=True)
         args.record_val_acc.to_csv(os.path.join(args.output_dir, 'val_acc.csv'))
@@ -155,7 +157,7 @@ def main():
     # General DL parameters
     parser.add_argument("--net_name", type = str, default="ViT-small",  help="Basic Name of this run with detailed network-architecture selection. ")
     parser.add_argument("--FL_platform", type = str, default="YOLOv5-FedAVG", choices=[ "Swin-FedAVG", "ViT-FedAVG", "Swin-FedAVG", "EfficientNet-FedAVG", "ResNet-FedAVG", "YOLOv5-FedAVG"],  help="Choose of different FL platform.")
-    parser.add_argument("--dataset", choices=["coco", "cifar10", "Retina"], default="coco", help="Which dataset.")
+    parser.add_argument("--dataset", choices=["coco", "coco_custom"], default="coco", help="Which dataset.")
     parser.add_argument("--data_path", type=str, default='./data/', help="Where is dataset located.")
 
     parser.add_argument("--save_model_flag",  action='store_true', default=False,  help="Save the best model for each client.")
@@ -171,6 +173,7 @@ def main():
 
     parser.add_argument("--img_size", default=224, type=int, help="Final train resolution")
     parser.add_argument("--batch_size", default=32, type=int,  help="Local batch size for training.")
+    parser.add_argument("--total_batch_size", default=32, type=int, help=",,")
     parser.add_argument("--gpu_ids", type=str, default='2', help="gpu ids: e.g. 0  0,1,2")
 
     parser.add_argument('--seed', type=int, default=42, help="random seed for initialization") #99999
@@ -189,12 +192,14 @@ def main():
     parser.add_argument("--max_communication_rounds", default=100, type=int,  help="Total communication rounds")
     parser.add_argument("--num_local_clients", default=-1, choices=[10, -1], type=int, help="Num of local clients joined in each FL train. -1 indicates all clients")
     parser.add_argument("--split_type", type=str, choices=["split_1", "split_2", "split_3", "real", "central"], default="split_3", help="Which data partitions to use")
+    parser.add_argument("--client_num_in_total", type=int, default=2, help=",,")
+    parser.add_argument("--worker_num", type=int, default=2, help=",,")
 
     ## YOLO hyperparameters
     parser.add_argument('--weights', type=str, default='fedmodels/yolov5s.pt', help='initial weights path')
     parser.add_argument('--yolo_cfg', type=str, default='', help='model.yaml path')
-    parser.add_argument('--data_conf', type=str, default='data/coco.yaml', help='dataset.yaml path')
-    parser.add_argument('--yolo_hyp', type=str, default='data/hyps/hyp.scratch-low.yaml', help='hyperparameters path')    
+    parser.add_argument('--data_conf', type=str, default='data/coco_custom.yaml', help='dataset.yaml path')
+    parser.add_argument('--yolo_hyp', type=str, default='fedmodels/yolov5/data/hyps/hyp.scratch-low.yaml', help='hyperparameters path')    
     parser.add_argument('--img_size_list', default=[640, 640])
     parser.add_argument("--yolo_bs", default=32, type=int,  help="dataset batch size.")
     parser.add_argument("--shuffle", default=False, help="dataset shuffle.")

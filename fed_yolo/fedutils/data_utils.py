@@ -9,7 +9,9 @@ from timm.data import Mixup
 from timm.data import create_transform
 # from timm.data.transforms import _pil_interp
 from fedmodels.yolov5.utils.general import check_dataset
+from fedutils.data_loader import load_partition_data_custom
 from torch.utils.data import DataLoader
+import yaml
 
 import torch
 from torchvision import transforms
@@ -156,31 +158,35 @@ class DatasetFLViT(data.Dataset):
             return len(self.data)
 
 
-def create_dataset_and_evalmetrix(args):
+def create_dataset_and_evalmetrix(args, model):
 
     ## get the joined clients
     if args.split_type == 'central':
         args.dis_cvs_files = ['central']
         
     if args.dataset == 'coco':
-        data_dict = check_dataset(args.data_conf)
-        train_path, val_path = data_dict['train'], data_dict['val']
-        train_loader = DataLoader(train_path,
-                                    batch_size=args.yolo_bs,
-                                    shuffle=args.shuffle)
-        print(data_dict)
-        print(args.split_type)
+
+        with open(args.yolo_hyp) as f:
+            hyp = yaml.load(f, Loader=yaml.FullLoader)  # load hyps
+            if "box" not in hyp:
+                warn(
+                    'Compatibility: %s missing "box" which was renamed from "giou" in %s'
+                    % (args.yolo_hyp, "https://github.com/ultralytics/yolov5/pull/1120")
+                )
+                hyp["box"] = hyp.pop("giou")
         
-        data_all = data_all[args.split_type]
-        args.dis_cvs_files = [key for key in data_all['data'].keys() if 'train' in key]
-        args.clients_with_len = {name: data_all['data'][name].shape[0] for name in args.dis_cvs_files}
+        dataset = load_partition_data_custom(args, hyp, model)
+        [
+            args.train_dataset_dict,
+            args.train_data_num_dict,
+            args.train_data_loader_dict,
+            args.test_data_loader_dict,
+            class_num,
+        ] = dataset
 
-        # data_all = data_all.item()
-
-        # data_all = data_all[args.split_type]
-        # args.dis_cvs_files = [key for key in data_all['data'].keys() if 'train' in key]
-        # args.clients_with_len = {name: data_all['data'][name].shape[0] for name in args.dis_cvs_files}
-
+        args.dis_cvs_files = list(args.train_dataset_dict.keys())
+        args.clients_with_len = {name: args.train_data_num_dict[name] for name in args.dis_cvs_files}
+        
     elif args.dataset == 'cifar10':
 
         # get the client with number
@@ -192,7 +198,7 @@ def create_dataset_and_evalmetrix(args):
         args.clients_with_len = {name: data_all['data'][name].shape[0] for name in args.dis_cvs_files}
         print(data_all['data']['train_1'].shape)
         print(args.split_type)
-        import pdb; pdb.set_trace()
+
     elif args.dataset == 'Retina':
         args.dis_cvs_files = os.listdir(os.path.join(args.data_path, args.split_type))
         args.clients_with_len = {}
@@ -201,7 +207,6 @@ def create_dataset_and_evalmetrix(args):
             img_paths = list({line.strip().split(',')[0] for line in
                               open(os.path.join(args.data_path, args.split_type, single_client))})
             args.clients_with_len[single_client] = len(img_paths)
-
 
     elif args.dataset == 'CelebA':
         data_all = np.load(os.path.join('./data/', args.dataset + '.npy'), allow_pickle=True)
@@ -212,7 +217,6 @@ def create_dataset_and_evalmetrix(args):
         if args.split_type == 'real':
             args.clients_with_len = {name: len(data_all['real']['train'][name]['x']) for name in
                                      data_all['real']['train']}
-
 
     ## step 2: get the evaluation matrix
     args.learning_rate_record = []
