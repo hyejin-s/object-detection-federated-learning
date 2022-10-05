@@ -23,15 +23,13 @@ from torch.cuda import amp
 
 import sys
 import os
-sys.path.append("/home/phj/FedML/python/app/fedcv/object_detection/model/yolov5/utils")
-# sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-# print(sys.path)
+
  
-from dataloaders import exif_transpose, letterbox
-from general import (LOGGER, check_requirements, check_suffix, check_version, colorstr, increment_path,
+from utils.dataloaders import exif_transpose, letterbox
+from utils.general import (LOGGER, check_requirements, check_suffix, check_version, colorstr, increment_path,
                            make_divisible, non_max_suppression, scale_coords, xywh2xyxy, xyxy2xywh)
-from plots import Annotator, colors, save_one_box
-from torch_utils import copy_attr, time_sync
+from utils.plots import Annotator, colors, save_one_box
+from utils.torch_utils import copy_attr, time_sync
 
 # from utils.dataloaders import exif_transpose, letterbox
 # from utils.general import (LOGGER, check_requirements, check_suffix, check_version, colorstr, increment_path,

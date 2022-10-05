@@ -168,7 +168,7 @@ def create_dataset_and_evalmetrix(args):
         train_loader = DataLoader(train_path,
                                     batch_size=args.yolo_bs,
                                     shuffle=args.shuffle)
-        print(train_loader)
+        print(data_dict)
         print(args.split_type)
         
         data_all = data_all[args.split_type]
@@ -186,14 +186,13 @@ def create_dataset_and_evalmetrix(args):
         # get the client with number
         data_all = np.load(os.path.join('./data/', args.dataset + '.npy'), allow_pickle=True)
         data_all = data_all.item()
-        print("----------------")
-        print(data_all)
-        import pdb; pdb.set_trace()
         
         data_all = data_all[args.split_type]
         args.dis_cvs_files = [key for key in data_all['data'].keys() if 'train' in key]
         args.clients_with_len = {name: data_all['data'][name].shape[0] for name in args.dis_cvs_files}
-
+        print(data_all['data']['train_1'].shape)
+        print(args.split_type)
+        import pdb; pdb.set_trace()
     elif args.dataset == 'Retina':
         args.dis_cvs_files = os.listdir(os.path.join(args.data_path, args.split_type))
         args.clients_with_len = {}

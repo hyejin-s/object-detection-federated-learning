@@ -1,1 +1,4 @@
-data/
+**/data/
+**/datasets/
+**/output/
+**/__pycache__/

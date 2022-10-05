@@ -18,11 +18,7 @@ import seaborn as sn
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
-import sys
-import os
-sys.path.append("/home/phj/FedML/python/app/fedcv/object_detection/model/yolov5/utils")
-
-from general import (
+from .general import (
     CONFIG_DIR,
     FONT,
     LOGGER,
@@ -37,7 +33,7 @@ from general import (
     xywh2xyxy,
     xyxy2xywh,
 )
-from metrics import fitness
+from .metrics import fitness
 
 # Settings
 RANK = int(os.getenv("RANK", -1))
