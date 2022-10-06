@@ -52,6 +52,7 @@ def train(args, model):
         single_cls=False,
         dataloader=args.test_loader,
         plots=False,
+        verbose=True,
         compute_loss=compute_loss,
     )
 
@@ -359,7 +360,7 @@ def main():
     )
     parser.add_argument(
         "--learning_rate",
-        default=1e-4,
+        default=1e-3,
         type=float,
         help="The initial learning rate for SGD. Set to [3e-3] for ViT-CWT",
     )

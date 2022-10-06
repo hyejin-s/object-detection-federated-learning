@@ -39,7 +39,7 @@ def create_dataset_and_evalmetrix(args, model):
             args.train_data_loader_dict,
             args.test_data_loader_dict,
             args.test_loader,
-            class_num,
+            args.num_classes,
         ] = dataset
 
         args.dis_cvs_files = list(args.train_dataset_dict.keys())
