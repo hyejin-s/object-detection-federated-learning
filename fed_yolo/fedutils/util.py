@@ -237,7 +237,7 @@ def Partial_Client_Selection(args, model):
 
         # get the total decay steps first
         if not args.dataset == 'CelebA':
-            args.t_total[proxy_single_client] = args.clients_with_len[proxy_single_client] *  args.max_communication_rounds / args.batch_size * args.E_epoch
+            args.t_total[proxy_single_client] = args.clients_with_len[proxy_single_client] *  args.max_communication_rounds / args.batch_size * args.local_epoch
         else:
             # just approximate to make sure average communication round for each client is args.max_communication_rounds
             tmp_rounds = [math.ceil(len/32) for len in args.clients_with_len.values()]
@@ -251,11 +251,9 @@ def Partial_Client_Selection(args, model):
     return model_all, optimizer_all, scheduler_all
 
 
-
-
 def average_model(args,  model_avg, model_all):
     model_avg.cpu()
-    print('Calculate the model avg----')
+    print('---- calculate the model avg ----')
     params = dict(model_avg.named_parameters())
 
     # for name, value in model_state_dict.items():
@@ -275,7 +273,7 @@ def average_model(args,  model_avg, model_all):
                                      name].data * single_client_weight
         params[name].data.copy_(tmp_param_data)
 
-    print('Update each client model parameters----')
+    print('---- update each client model parameters ----')
 
     for single_client in args.proxy_clients:
         tmp_params = dict(model_all[single_client].named_parameters())

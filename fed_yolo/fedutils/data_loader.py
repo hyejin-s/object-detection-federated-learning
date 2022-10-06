@@ -91,7 +91,6 @@ def check_img_size(img_size, s=32):
         )
     return new_size
 
-
 def create_dataloader(
     path,
     imgsz,
@@ -167,7 +166,6 @@ def img2label_paths(img_paths):
         os.sep + "labels" + os.sep,
     )  # /images/, /labels/ substrings
     return [sb.join(x.rsplit(sa, 1)).rsplit(".", 1)[0] + ".txt" for x in img_paths]
-
 
 class LoadImagesAndLabels(Dataset):
     # YOLOv5 train_loader/val_loader, loads images and labels for training and validation
@@ -768,7 +766,6 @@ def partition_data(data_path, partition, n_nets):
 
     return net_dataidx_map
 
-
 def non_iid_coco(label_path, client_num):
     res_bin = {}
     label_path = Path(label_path)
@@ -810,15 +807,12 @@ def non_iid_coco(label_path, client_num):
     fs_id = [int(i.split(".")[0]) for i in fs]
     res_bin[b + 1] = np.array(list(fs_id))
     return res_bin
-    # print (res_bin)
-
 
 def load_partition_data_coco(args, hyp, model):
-    save_dir, epochs, batch_size, total_batch_size, weights = (
+    save_dir, epochs, batch_size, weights = (
         Path(args.save_dir),
         args.epochs,
         args.batch_size,
-        args.total_batch_size,
         args.weights,
     )
 
@@ -863,10 +857,7 @@ def load_partition_data_coco(args, hyp, model):
 
 
 def load_partition_data_custom(args, hyp, model):
-    batch_size, total_batch_size = (
-        args.batch_size,
-        args.total_batch_size
-    )
+    batch_size = args.batch_size
 
     with open(args.data_conf) as f:
         data_dict = yaml.load(f, Loader=yaml.FullLoader)  # data dict
@@ -889,11 +880,21 @@ def load_partition_data_custom(args, hyp, model):
     train_data_num_dict = dict()
     train_dataset_dict = dict()
 
-    class_list = [51, 60]
+    testloader = create_dataloader(
+            test_path,
+            imgsz_test,
+            batch_size,
+            gs,
+            args,  # testloader
+            hyp=hyp,
+            rect=True,
+            rank=-1,
+            pad=0.5,
+            # net_dataidx_map=net_dataidx_map_test[client_idx],
+            workers=args.worker_num,
+        )[0]
 
-    # if args.process_id == 0:  # server
-    #     pass
-    # else:
+    class_list = [51, 60]
     for client_idx in range(args.client_num_in_total):
         # client_idx = int(args.process_id) - 1
         train_path = data_dict["path"] + f"/train_class{class_list[client_idx]}"
@@ -908,20 +909,6 @@ def load_partition_data_custom(args, hyp, model):
             workers=args.worker_num,
         )
 
-        testloader = create_dataloader(
-            test_path,
-            imgsz_test,
-            total_batch_size,
-            gs,
-            args,  # testloader
-            hyp=hyp,
-            rect=True,
-            rank=-1,
-            pad=0.5,
-            # net_dataidx_map=net_dataidx_map_test[client_idx],
-            workers=args.worker_num,
-        )[0]
-
         train_dataset_dict[client_idx] = dataset
         train_data_num_dict[client_idx] = len(dataset)
         train_data_loader_dict[client_idx] = dataloader
@@ -933,5 +920,6 @@ def load_partition_data_custom(args, hyp, model):
         train_data_num_dict,
         train_data_loader_dict,
         test_data_loader_dict,
+        testloader,
         nc,
     )
