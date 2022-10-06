@@ -40,7 +40,7 @@ def print_options(args, model):
     print(message)
 
 def initization_configure(args, vis= False):
-    args.device = torch.device("cuda:{gpu_id}".format(gpu_id = args.gpu_ids) if torch.cuda.is_available() else "cpu")
+    args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # args.device = torch.device("cpu")
 
     # Set seed
@@ -51,11 +51,6 @@ def initization_configure(args, vis= False):
     torch.backends.cudnn.deterministic = True
     if not args.device == 'cpu':
         torch.cuda.manual_seed(args.seed)
-
-    if args.dataset == 'cifar10':
-        args.num_classes = 10
-    else:
-        args.num_classes = 2
 
     # Set model type related parameters
     if "ResNet" in args.FL_platform:
@@ -75,19 +70,6 @@ def initization_configure(args, vis= False):
             print('We use default ResNet 50')
         model.fc = nn.Linear(model.fc.weight.shape[1], args.num_classes)
         model.to(args.device)
-
-    # elif "Efficient" in args.FL_platform:
-    #     args.Use_ResNet = True
-
-    #     try:
-    #         model = EfficientNet.from_pretrained(args.net_name)
-    #         print('We use EfficientNet with model architecture', args.net_name)
-    #     except:
-    #         print('Not implemented Efficient architecture, we use default Efficient-b5')
-    #         model = EfficientNet.from_pretrained('efficientnet-b5')
-
-    #     model._fc = nn.Linear(model._fc.weight.shape[1], args.num_classes)
-    #     model.to(args.device)
 
     elif "ViT" in args.FL_platform:
         if 'tiny' in args.net_name:
@@ -142,9 +124,9 @@ def initization_configure(args, vis= False):
 
     # set output parameters
     print(args.optimizer_type)
-    args.name = args.net_name + '_' + args.split_type + '_lr_' + str(args.learning_rate) + '_Pretrained_' \
+    args.name = args.net_name + '_lr_' + str(args.learning_rate) + '_Pretrained_' \
                 + str(args.Pretrained) + "_optimizer_" + str(args.optimizer_type) +  '_WUP_'  + str(args.warmup_steps) \
-                + '_Round_' + str(args.max_communication_rounds) + '_Eepochs_' + str(args.E_epoch) + '_Seed_' + str(args.seed)
+                + '_Round_' + str(args.max_communication_rounds) + '_local_epochs_' + str(args.local_epoch) + '_Seed_' + str(args.seed)
 
     args.output_dir = os.path.join('output', args.FL_platform, args.dataset, args.name)
     os.makedirs(args.output_dir, exist_ok=True)
