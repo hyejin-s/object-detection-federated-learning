@@ -116,7 +116,6 @@ def init_yolo(args, device="cpu"):
 
     # Model
     print("weights:", weights)
-
     # if args.model.lower() == "yolov5":
     pretrained = weights.endswith(".pt")
     if pretrained:
@@ -140,8 +139,8 @@ def init_yolo(args, device="cpu"):
             "Transferred %g/%g items from %s"
             % (len(state_dict), len(model.state_dict()), weights)
         )  # report
-        # else:
-        #     model = YOLOv5(args.yolo_cfg, ch=3, nc=nc).to(device)  # create
+    else:
+        model = YOLOv5(args.yolo_cfg, ch=3, nc=nc).to(device)  # create
 
     # print(model)
     args.model_stride = model.stride
