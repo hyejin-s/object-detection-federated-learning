@@ -1,5 +1,6 @@
 **/datasets/
 **/output/
 **/__pycache__/
+**/coco_without_classes/
 **/runs/
 **/LGE-dataset
