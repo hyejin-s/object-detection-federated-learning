@@ -5,8 +5,6 @@ import matplotlib.pyplot as plt
 
 
 class DatasetDist:
-    """ """
-
     def __init__(self, data_path, partition="train2017"):
         self.data_path = data_path
         self.dir = os.path.join(data_path, partition)
