@@ -2,6 +2,7 @@
 from __future__ import absolute_import, division, print_function
 
 import os
+import warnings 
 import argparse
 import numpy as np
 from copy import deepcopy
@@ -10,12 +11,10 @@ import yaml
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
-
 from fedmodels.yolov5.utils.loss import ComputeLoss
 import fedmodels.yolov5.val as validate
 
-from fedutils.data_utils import create_dataset_and_evalmetrix
+from fedutils.data_loader import load_partition_data_custom
 from fedutils.util import Partial_Client_Selection, average_model
 from fedutils.start_config import initization_configure
 
@@ -26,8 +25,28 @@ def train(args, model):
     writer = SummaryWriter(log_dir=os.path.join(args.output_dir, "logs"))
 
     # Prepare dataset
-    create_dataset_and_evalmetrix(args, model)
+    with open(args.yolo_hyp) as f:
+        hyp = yaml.load(f, Loader=yaml.FullLoader)  # load hyps
+        if "box" not in hyp:
+            warnings.warn(
+                'Compatibility: %s missing "box" which was renamed from "giou" in %s'
+                % (args.yolo_hyp, "https://github.com/ultralytics/yolov5/pull/1120")
+            )
+            hyp["box"] = hyp.pop("giou")
+    
+    dataset = load_partition_data_custom(args, hyp, model)
+    [ 
+        train_dataset_dict,
+        train_data_num_dict,
+        train_data_loader_dict,
+        test_data_loader_dict,
+        test_loader,
+        args.num_classes,
+    ] = dataset
 
+    args.dis_cvs_files = list(train_dataset_dict.keys())
+    args.clients_with_len = {name: train_data_num_dict[name] for name in args.dis_cvs_files}
+    
     model.to(args.device)
     compute_loss = ComputeLoss(model)
 
@@ -45,18 +64,18 @@ def train(args, model):
     # checking initial model performace
     initial_results, _, _ = validate.run(
         data_dict,
+        weights=args.weights,
         batch_size=args.batch_size,
         imgsz=args.img_size,
         half=True,
-        model=model,
-        single_cls=False,
-        dataloader=args.test_loader,
+        # model=model,
+        dataloader=test_loader,
         plots=False,
-        verbose=True,
+        verbose=False,
         compute_loss=compute_loss,
     )
 
-    with open("./output/server.txt", "a+") as f:
+    with open("./output/all_coco/server.txt", "a+") as f:
         f.write(str(initial_results))
         f.write("\n")
 
@@ -97,7 +116,7 @@ def train(args, model):
                 args.clients_with_len[curr_single_client] / curr_total_client_lens
             )
 
-            train_loader = args.train_data_loader_dict[proxy_single_client]
+            train_loader = train_data_loader_dict[proxy_single_client]
 
             model = model_all[proxy_single_client].to(args.device).train()
             compute_loss = ComputeLoss(model)
@@ -193,7 +212,7 @@ def train(args, model):
                 half=True,
                 model=model,
                 single_cls=False,
-                dataloader=args.test_loader,
+                dataloader=test_loader,
                 plots=False,
                 compute_loss=compute_loss,
             )
@@ -210,16 +229,16 @@ def train(args, model):
             half=True,
             model=model_avg,
             single_cls=False,
-            dataloader=args.test_loader,
+            dataloader=test_loader,
             plots=False,
             compute_loss=compute_loss,
         )
 
-        with open("./output/server.txt", "a+") as f:
+        with open("./output/all_coco/server.txt", "a+") as f:
             f.write(str(results_server))
             f.write("\n")
 
-        with open("./output/clients.txt", "a+") as f:
+        with open("./output/all_coco/clients.txt", "a+") as f:
             for curr_single_client, proxy_single_client in zip(
                 curr_selected_clients, args.proxy_clients
             ):
@@ -325,7 +344,7 @@ def main():
     )
 
     parser.add_argument(
-        "--img_size", default=224, type=int, help="Final train resolution"
+        "--img_size", default=640, type=int, help="Final train resolution"
     )
     parser.add_argument(
         "--batch_size", default=32, type=int, help="Local batch size for training."
@@ -395,7 +414,7 @@ def main():
         default="/hdd/hdd3/pretrained_model/small_custom/best.pt",
         help="initial weights path",
     )
-    parser.add_argument("--yolo_cfg", type=str, default="", help="model.yaml path")
+    parser.add_argument("--yolo_cfg", type=str, default="./fedmodels/yolov5/models/yolov5s.yaml", help="model.yaml path")
     parser.add_argument(
         "--data_conf",
         type=str,
@@ -412,6 +431,8 @@ def main():
     parser.add_argument("--yolo_bs", default=32, type=int, help="dataset batch size.")
     parser.add_argument("--shuffle", default=False, help="dataset shuffle.")
 
+    # saving ------------------
+    # parser.add_argument("--save_dir", default='./output/')
     args = parser.parse_args()
 
     # Initialization
