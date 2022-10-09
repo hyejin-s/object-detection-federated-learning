@@ -52,22 +52,9 @@ class CocoCustomizer:
         create_dir(save_dir)
         for file in tqdm(self.file_list):
             after_remove_list = self.class_removal(file, remove_class, keep_prob)
-            print(after_remove_list)
             with open(os.path.join(save_dir, file), "w+") as f:
                 for obj in after_remove_list:
                     f.write(obj)
-                    f.write("\n")
-            if self.read_file(file) != after_remove_list:  ### 클래스가 존재해서 지워진 것 중에
-                dir = os.path.join(save_dir, f"{keep_prob}_touched_files")
-            else:
-                dir = os.path.join(save_dir, f"{keep_prob}_not_touched_files")
-            create_dir(dir)
-            with open(
-                os.path.join(dir, file),
-                "a",
-            ) as f:
-                for i in self.read_file(file):
-                    f.write(i)
                     f.write("\n")
         print(f"{self.dir} done")
 
