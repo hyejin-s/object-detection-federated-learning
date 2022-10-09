@@ -37,8 +37,8 @@ class CocoCustomizer:
         for object in obj_list:
             # object: 'class# x y w h'
             # e.g. '58 0.911730 0.533705 0.176540 0.559554'
-            if random.random() > keep_prob:
-                if int(object.split()[0]) in remove_class:
+            if int(object.split()[0]) in remove_class:
+                if random.random() > keep_prob:
                     removed_list.remove(object)
 
         return removed_list
@@ -52,12 +52,12 @@ class CocoCustomizer:
         create_dir(save_dir)
         for file in tqdm(self.file_list):
             after_remove_list = self.class_removal(file, remove_class, keep_prob)
-
+            print(after_remove_list)
+            with open(os.path.join(save_dir, file), "w+") as f:
+                for obj in after_remove_list:
+                    f.write(obj)
+                    f.write("\n")
             if self.read_file(file) != after_remove_list:  ### 클래스가 존재해서 지워진 것 중에
-                with open(os.path.join(save_dir, file), "w+") as f:
-                    for obj in after_remove_list:
-                        f.write(obj)
-                        f.write("\n")
                 dir = os.path.join(save_dir, f"{keep_prob}_touched_files")
             else:
                 dir = os.path.join(save_dir, f"{keep_prob}_not_touched_files")
@@ -89,12 +89,12 @@ def main(args):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str, default="/hdd/hdd3/coco_custom/labels")
+    parser.add_argument("--data_path", type=str, default="/hdd/hdd3/coco/labels")
     parser.add_argument(
         "--save_root",
         help="save root",
         type=str,
-        default="./coco_without_classes",
+        default="/hdd/hdd3/coco_no_chair_table/labels",
     )
     parser.add_argument("--keep_prob", help="keep ratio", type=float, default=0.1)
     parser.add_argument(
