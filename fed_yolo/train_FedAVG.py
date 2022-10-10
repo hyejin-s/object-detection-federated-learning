@@ -256,7 +256,29 @@ def train(args, model):
     print("================End training! ================ ")
 
 
-def main():
+def main(args):
+
+    # Initialization
+    model = initization_configure(args)
+    # print(model)
+
+    # Training, Validating, and Testing
+    train(args, model)
+
+    message = "\n \n ==============Start showing final performance ================= \n"
+    message += "Final union test accuracy is: %2.5f  \n" % (
+        np.asarray(list(args.current_test_acc.values())).mean()
+    )
+    message += "================ End ================ \n"
+
+    with open(args.file_name, "a+") as args_file:
+        args_file.write(message)
+        args_file.write("\n")
+
+    print(message)
+
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # General DL parameters
     parser.add_argument(
@@ -435,25 +457,4 @@ def main():
     # parser.add_argument("--save_dir", default='./output/')
     args = parser.parse_args()
 
-    # Initialization
-    model = initization_configure(args)
-    # print(model)
-
-    # Training, Validating, and Testing
-    train(args, model)
-
-    message = "\n \n ==============Start showing final performance ================= \n"
-    message += "Final union test accuracy is: %2.5f  \n" % (
-        np.asarray(list(args.current_test_acc.values())).mean()
-    )
-    message += "================ End ================ \n"
-
-    with open(args.file_name, "a+") as args_file:
-        args_file.write(message)
-        args_file.write("\n")
-
-    print(message)
-
-
-if __name__ == "__main__":
-    main()
+    main(args)
