@@ -3,6 +3,7 @@ from tqdm import tqdm
 import pickle
 import matplotlib.pyplot as plt
 
+import argparse
 
 class DatasetDist:
     def __init__(self, data_path, partition="train2017"):
@@ -31,7 +32,7 @@ class DatasetDist:
 
         return obj_class_list
 
-    def count_class(self):
+    def count_class(self, save_name):
         """
         Count the number of classes in the entire file
         return: dictionary (key: class, value: the number of class)
@@ -45,41 +46,44 @@ class DatasetDist:
                 else:
                     class_dic[i] = 1
 
-        with open("coco_train_dic_custom_ext.pickle", "wb") as f:
+        with open(save_name+".pickle", "wb") as f:
             pickle.dump(class_dic, f)
 
         return class_dic
 
+def main(args):
+    
+    if args.dist:
+        with open(args.name+".pickle", "rb") as f:
+            class_dic = pickle.load(f)
 
-root = "/hdd/hdd3/coco_custom_ext/labels/"
+        print(class_dic)
 
-train_data = DatasetDist(root, "train2017")
-train_data.count_class()
+    else:
+        dataset = DatasetDist(args.data_dir, args.name)
+        dataset.count_class(args.name)
 
-with open("coco_train_dic.pickle", "rb") as f:
-    class_dic = pickle.load(f)
+        with open(args.name+".pickle", "rb") as f:
+            class_dic = pickle.load(f)
 
-print("coco")
-print(class_dic)
+        print(class_dic)
 
-with open("coco_train_dic_custom.pickle", "rb") as f:
-    class_dic_custom = pickle.load(f)
-
-print("coco_custom")
-print(class_dic_custom)
-
-with open("coco_train_dic_custom_ext.pickle", "rb") as f:
-    class_dic_ext = pickle.load(f)
-
-print("coco_custom_ext")
-print(class_dic_ext)
+        plt.figure(figsize=(15, 10))
+        plt.bar(*zip(*class_dic.items()))
+        plt.xlabel('Class', fontsize=20)
+        plt.ylabel('The number of class', fontsize=20)
+        plt.title('COCO train dataset class distribution', fontsize=25)
+        plt.savefig(args.name+'.png')
 
 
-# plt.figure(figsize=(15, 10))
-# plt.bar(*zip(*class_dic.items()))
-# plt.xlabel('Class', fontsize=20)
-# plt.ylabel('The number of class', fontsize=20)
-# plt.title('COCO train dataset class distribution', fontsize=25)
-# plt.savefig('coco_train_distribution_custom.png')
-# plt.savefig('coco_train_distribution_custom.pdf')
-# plt.show()
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_dir", type=str, default="/hdd/hdd3/coco_custom/labels")
+    parser.add_argument("--name", help="folder name which wants to analyze", type=str, default="train2017")
+    parser.add_argument("--dist", help="if pickle file is already saved and only prints", default=False)
+    
+    args = parser.parse_args()
+    main(args)
+
+    
