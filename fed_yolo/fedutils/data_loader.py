@@ -797,7 +797,7 @@ def non_iid_coco(label_path, client_num):
     res_bin[b + 1] = np.array(list(fs_id))
     return res_bin
 
-def load_partition_data_custom(args, hyp, model):
+def load_partition_data_custom(args, hyp, model, class_list=None):
     batch_size = args.batch_size
 
     with open(args.data_conf) as f:
@@ -830,11 +830,10 @@ def load_partition_data_custom(args, hyp, model):
             rect=True,
             rank=-1,
             pad=0.5,
-            workers=args.worker_num,
+            workers=args.num_workers,
         )[0]
 
-    if args.dataset == 'coco_custom':
-        class_list = [51, 60]
+    if args.dataset == 'per_class':
         for client_idx in range(args.client_num_in_total):
             # client_idx = int(args.process_id) - 1
             train_path = data_dict["path"] + f"/train_class{class_list[client_idx]}"
@@ -846,7 +845,7 @@ def load_partition_data_custom(args, hyp, model):
                 args,
                 hyp=hyp,
                 rect=True,
-                workers=args.worker_num,
+                workers=args.num_workers,
             )
 
             train_dataset_dict[client_idx] = dataset
@@ -854,7 +853,7 @@ def load_partition_data_custom(args, hyp, model):
             train_data_loader_dict[client_idx] = dataloader
             test_data_loader_dict[client_idx] = testloader
 
-    elif args.dataset == 'coco':
+    elif args.dataset == 'all':
 
         client_number = args.client_num_in_total
         partition = "homo"
@@ -872,7 +871,7 @@ def load_partition_data_custom(args, hyp, model):
                 rect=True,
                 augment=True,
                 net_dataidx_map=net_dataidx_map[client_idx],
-                workers=args.worker_num,
+                workers=args.num_workers,
             )
     
             train_dataset_dict[client_idx] = dataset
@@ -885,6 +884,54 @@ def load_partition_data_custom(args, hyp, model):
         train_data_num_dict,
         train_data_loader_dict,
         test_data_loader_dict,
+        testloader,
+        nc,
+    )
+    
+def load_server_data(args, hyp, model):
+    batch_size = args.batch_size
+
+    with open(args.data_conf) as f:
+        data_dict = yaml.load(f, Loader=yaml.FullLoader)  # data dict
+
+    train_path = "/hdd/hdd3/coco_custom/images/random_5e-1"
+    test_path = "/hdd/hdd3/coco/images/val2017"
+    train_path = os.path.expanduser(train_path)
+    test_path = os.path.expanduser(test_path)
+
+    nc, names = (
+        (int(data_dict["nc"]), data_dict["names"])
+    )  # number classes, names
+    gs = int(max(model.stride))  # grid size (max stride)
+    imgsz = check_img_size(args.img_size, gs, floor=gs * 2)
+
+    trainloader, train_dataset = create_dataloader(
+                train_path,
+                imgsz,
+                batch_size,
+                gs,
+                args,
+                hyp=hyp,
+                rect=True,
+                workers=args.num_workers,
+            )
+    
+    testloader = create_dataloader(
+            test_path,
+            imgsz,
+            batch_size,
+            gs,
+            hyp=hyp,
+            rect=True,
+            rank=-1,
+            pad=0.5,
+            workers=args.num_workers,
+        )[0]
+
+
+    return (
+        trainloader,
+        train_dataset,
         testloader,
         nc,
     )
