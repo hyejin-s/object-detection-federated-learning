@@ -894,7 +894,7 @@ def load_server_data(args, hyp, model):
     with open(args.data_conf) as f:
         data_dict = yaml.load(f, Loader=yaml.FullLoader)  # data dict
 
-    train_path = "/hdd/hdd3/coco_custom/images/random_5e-1"
+    train_path = "/hdd/hdd3/coco_no_chair_table/images/"
     test_path = "/hdd/hdd3/coco/images/val2017"
     train_path = os.path.expanduser(train_path)
     test_path = os.path.expanduser(test_path)

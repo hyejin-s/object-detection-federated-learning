@@ -27,7 +27,7 @@ def main(args):
     if not os.path.exists(label_path):
         os.makedirs(label_path)
 
-    for file in random_list:
+    for file in tqdm(random_list):
         file_name = file[:-4]
 
         # image copy                 

@@ -105,6 +105,11 @@ def train(args, model):
     
     model_avg = deepcopy(model).cpu() # server
     
+    # cuda = args.device.type
+
+    # if cuda and torch.cuda.device_count() > 1:
+    #     model_server = torch.nn.DataParallel(model_server)
+
     # train
     print("=============== running training ===============")
     compute_loss = ComputeLoss(model)
@@ -143,6 +148,8 @@ def train(args, model):
             train_loader = train_data_loader_dict[proxy_single_client]
 
             model = model_all[proxy_single_client].to(args.device).train()
+            
+            
             compute_loss = ComputeLoss(model)
             optimizer = optimizer_all[proxy_single_client]
             scheduler = scheduler_all[proxy_single_client]
@@ -372,8 +379,7 @@ def main(args):
         print("Train only nodes")
     # Initialization
     model = initization_configure(args)
-    # print(model)
-
+    
     # Training, Validating, and Testing
     train(args, model)
 
