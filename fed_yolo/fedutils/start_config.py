@@ -57,61 +57,7 @@ def init_configure(args, vis=False):
     if not args.device == "cpu":
         torch.cuda.manual_seed(args.seed)
 
-    # Set model type related parameters
-    if "ResNet" in args.FL_platform:
-        args.Use_ResNet = True
-        if "101" in args.net_name:
-            model = torch_models.resnet152(pretrained=args.Pretrained)
-            # model.fc = nn.Linear(2048, args.num_classes)
-            print("We use ResNet 152")
-
-        elif "32_8" in args.net_name:
-
-            model = torch_models.resnext101_32x8d(pretrained=args.Pretrained)
-            print("We use ResNet 101-32*8d")
-
-        else:
-            model = torch_models.resnet50(pretrained=args.Pretrained)
-            print("We use default ResNet 50")
-        model.fc = nn.Linear(model.fc.weight.shape[1], args.num_classes)
-        model.to(args.device)
-
-    elif "ViT" in args.FL_platform:
-        if "tiny" in args.net_name:
-            print("We use ViT tiny")
-            from timm.models.vision_transformer import vit_tiny_patch16_224
-
-            model = vit_tiny_patch16_224(pretrained=args.Pretrained)
-        elif "small" in args.net_name:
-            print("We use ViT small")
-            from timm.models.vision_transformer import vit_small_patch16_224
-
-            model = vit_small_patch16_224(pretrained=args.Pretrained)
-        else:
-            from timm.models.vision_transformer import vit_base_patch16_224
-
-            print("We use default ViT settting base")
-            model = vit_base_patch16_224(pretrained=args.Pretrained)
-
-        model.head = Linear(model.head.weight.shape[1], args.num_classes)
-        model.to(args.device)
-
-        # we test with timm
-
-    elif "Swin" in args.FL_platform:
-        print("We use Swin")
-        if not args.cfg:
-            sys.exit("Network configure file cfg for Swin is missing, code is exit")
-        swin_args = get_config(args)
-        model = build_model(args, swin_args)
-        if args.Pretrained:
-            checkpoint = torch.load(args.pretrained_dir, map_location="cpu")
-            model.load_state_dict(checkpoint["model"], strict=False)
-
-        model.head = Linear(model.head.weight.shape[1], args.num_classes)
-        model.to(args.device)
-
-    elif "YOLOv5" in args.FL_platform:
+    if "YOLOv5" in args.FL_platform:
         print("We use YOLOv5")
         # Model
         model, args = init_yolo(args=args, device=args.device)

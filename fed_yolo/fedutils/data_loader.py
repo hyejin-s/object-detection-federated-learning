@@ -809,9 +809,9 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
         data_dict = yaml.load(f, Loader=yaml.FullLoader)  # data dict
 
     train_path = data_dict["path"] + data_dict["train"]
-    test_path = "/hdd/hdd3/coco/images/val2017"
+    val_path = "/hdd/hdd3/coco/images/val2017"
     train_path = os.path.expanduser(train_path)
-    test_path = os.path.expanduser(test_path)
+    val_path = os.path.expanduser(val_path)
 
     nc, names = (int(data_dict["nc"]), data_dict["names"])  # number classes, names
     gs = int(max(model.stride))  # grid size (max stride)
@@ -824,8 +824,8 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
     train_data_num_dict = dict()
     train_dataset_dict = dict()
 
-    testloader = create_dataloader(
-        test_path,
+    val_loader = create_dataloader(
+        val_path,
         imgsz,
         batch_size,
         gs,
@@ -839,7 +839,7 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
     if args.dataset == "per_class":
         for client_idx in range(args.client_num_in_total):
             # client_idx = int(args.process_id) - 1
-            train_path = data_dict["path"] + f"/train_class{class_list[client_idx]}"
+            train_path = "/hdd/hdd3/coco_custom/images/train_class51"  # data_dict["path"] + f"/train_class{class_list[client_idx]}"
             dataloader, dataset = create_dataloader(
                 train_path,
                 imgsz,
@@ -854,7 +854,7 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
             train_dataset_dict[client_idx] = dataset
             train_data_num_dict[client_idx] = len(dataset)
             train_data_loader_dict[client_idx] = dataloader
-            test_data_loader_dict[client_idx] = testloader
+            test_data_loader_dict[client_idx] = val_loader
 
     elif args.dataset == "all":
 
@@ -880,14 +880,14 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
             train_dataset_dict[client_idx] = dataset
             train_data_num_dict[client_idx] = len(dataset)
             train_data_loader_dict[client_idx] = dataloader
-            test_data_loader_dict[client_idx] = testloader
+            test_data_loader_dict[client_idx] = val_loader
 
     return (
         train_dataset_dict,
         train_data_num_dict,
         train_data_loader_dict,
         test_data_loader_dict,
-        testloader,
+        val_loader,
         nc,
     )
 
@@ -898,7 +898,7 @@ def load_server_data(args, hyp, model):
     with open(args.data_conf) as f:
         data_dict = yaml.load(f, Loader=yaml.FullLoader)  # data dict
 
-    train_path = "/hdd/hdd3/coco_custom/images/random_5e-1"
+    train_path = "/hdd/hdd3/coco_custom/images/train_class51"  # "/hdd/hdd3/coco_custom/images/random_5e-1"
     test_path = "/hdd/hdd3/coco/images/val2017"
     train_path = os.path.expanduser(train_path)
     test_path = os.path.expanduser(test_path)

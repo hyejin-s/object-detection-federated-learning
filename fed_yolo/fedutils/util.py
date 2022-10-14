@@ -286,7 +286,7 @@ def Partial_Client_Selection(args, model):
     args.t_total = {}
 
     for proxy_single_client in args.proxy_clients:
-        model_all[proxy_single_client] = deepcopy(model).cpu()
+        model_all[proxy_single_client] = deepcopy(model)  # .cpu()
         optimizer_all[proxy_single_client] = optimization_fun(
             args, model_all[proxy_single_client]
         )
@@ -321,7 +321,7 @@ def Partial_Client_Selection(args, model):
 
 
 def average_model(args, model_avg, model_all, model_server, server_weight=None):
-    model_avg.cpu()
+    model_avg  # .cpu()
     print("---- calculate the model avg ----")
     params = dict(model_avg.named_parameters())
 

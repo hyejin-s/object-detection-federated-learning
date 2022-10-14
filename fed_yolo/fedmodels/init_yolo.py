@@ -7,6 +7,8 @@ from warnings import warn
 import yaml
 import torch
 
+from .yolov5.utils.torch_utils import de_parallel
+
 # from data.data_loader import load_partition_data_coco
 from .yolov5.utils.general import (
     increment_path,
@@ -26,7 +28,11 @@ except ImportError:
     )
 
 
+RANK = int(os.getenv("RANK", -1))
+
+
 def init_yolo(args, device="cpu"):
+    cuda = device != "cpu"
     # init settings
     args.yolo_hyp = args.yolo_hyp or (
         "hyp.finetune.yaml" if args.weights else "hyp.scratch.yaml"
@@ -139,6 +145,16 @@ def init_yolo(args, device="cpu"):
     else:
         model = YOLOv5(args.yolo_cfg, ch=3, nc=nc).to(device)  # create
 
+    # DP mode
+    if cuda and RANK == -1 and torch.cuda.device_count() > 1:
+        print(
+            "WARNING ⚠️ DP not recommended, use torch.distributed.run for best DDP Multi-GPU results.\n"
+            "See Multi-GPU Tutorial at https://github.com/ultralytics/yolov5/issues/475 to get started."
+        )
+        stride = model.stride.to(device)
+        model = torch.nn.DataParallel(model)
+        model.stride = stride
+
     # print(model)
     args.model_stride = model.stride
     gs = int(max(model.stride))  # grid size (max stride)
@@ -146,7 +162,10 @@ def init_yolo(args, device="cpu"):
         check_img_size(x, gs) for x in args.img_size_list
     ]  # verify imgsz are gs-multiples
 
-    hyp["cls"] *= nc / 80.0
+    nl = de_parallel(model).model[-1].nl  # number of detection layers (to scale hyps)
+    hyp["box"] *= 3 / nl  # scale to layers
+    hyp["cls"] *= nc / 80 * 3 / nl  # scale to classes and layers
+    hyp["obj"] *= (imgsz / 640) ** 2 * 3 / nl  # scale to image size and layers
     model.nc = nc  # attach number of classes to model
     model.hyp = hyp  # attach hyperparameters to model
     model.gr = 1.0  # iou loss ratio (obj_loss = 1.0 or iou)

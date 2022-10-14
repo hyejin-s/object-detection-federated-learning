@@ -42,7 +42,7 @@ def train(args, model):
         train_data_num_dict,
         train_data_loader_dict,
         test_data_loader_dict,
-        test_loader,
+        val_loader,
         args.num_classes,
     ] = dataset
 
@@ -53,7 +53,7 @@ def train(args, model):
         name: train_data_num_dict[name] for name in args.dis_cvs_files
     }
 
-    model.to(args.device)
+    # model.to(args.device)
     compute_loss = ComputeLoss(model)
 
     with open(args.data_conf) as f:
@@ -89,7 +89,7 @@ def train(args, model):
         imgsz=args.img_size,
         half=True,
         # model=model,
-        dataloader=test_loader,
+        dataloader=val_loader,
         plots=False,
         verbose=False,
         compute_loss=compute_loss,
@@ -101,11 +101,11 @@ def train(args, model):
 
     # Configuration for FedAVG, prepare model, optimizer, scheduler
     model_all, optimizer_all, scheduler_all = Partial_Client_Selection(args, model)
-    model_server = deepcopy(model).cpu()  # server
+    model_server = deepcopy(model)  # .cpu()  # server
     optimizer_server = optimization_fun(args, model_server)
     scheduler_server = setup_scheduler(args, optimizer_server, 1)
 
-    model_avg = deepcopy(model).cpu()  # server
+    model_avg = deepcopy(model)  # .cpu()  # server
 
     # train
     print("=============== running training ===============")
@@ -144,7 +144,7 @@ def train(args, model):
 
             train_loader = train_data_loader_dict[proxy_single_client]
 
-            model = model_all[proxy_single_client].to(args.device).train()
+            model = model_all[proxy_single_client].train()  # .to(args.device).train()
             compute_loss = ComputeLoss(model)
             optimizer = optimizer_all[proxy_single_client]
             scheduler = scheduler_all[proxy_single_client]
@@ -221,7 +221,7 @@ def train(args, model):
             # the ratio of clients for updating the clients weights
             server_weight = len(server_dataset) / curr_total_client_lens
 
-            model = model_server.to(args.device).train()
+            model = model_server.train()  # .to(args.device).train()
             compute_loss = ComputeLoss(model)
 
             if args.decay_type == "step":
@@ -287,7 +287,7 @@ def train(args, model):
         ):
             args.single_client = curr_single_client
             model = model_all[proxy_single_client]
-            model.to(args.device)
+            model.to("cuda:0")
             compute_loss = ComputeLoss(model)
             results[proxy_single_client], maps, _ = validate.run(
                 data_dict,
@@ -296,14 +296,14 @@ def train(args, model):
                 half=True,
                 model=model,
                 single_cls=False,
-                dataloader=test_loader,
+                dataloader=val_loader,
                 plots=False,
                 compute_loss=compute_loss,
             )
 
         # evaluate fine-tuning server's result
         if args.parti_server:
-            model_server.to(args.device)
+            # model_server.to(args.device)
             compute_loss = ComputeLoss(model_server)
             results_server, maps, _ = validate.run(
                 data_dict,
@@ -312,7 +312,7 @@ def train(args, model):
                 half=True,
                 model=model_server,
                 single_cls=False,
-                dataloader=test_loader,
+                dataloader=val_loader,
                 plots=False,
                 compute_loss=compute_loss,
             )
@@ -328,7 +328,7 @@ def train(args, model):
             average_model(args, model_avg, model_all, model_server, weight)
 
         # then evaluate server
-        model_avg.to(args.device)
+        # model_avg.to(args.device)
         compute_loss = ComputeLoss(model_avg)
         results_avg_server, maps, _ = validate.run(
             data_dict,
@@ -337,7 +337,7 @@ def train(args, model):
             half=True,
             model=model_avg,
             single_cls=False,
-            dataloader=test_loader,
+            dataloader=val_loader,
             plots=False,
             compute_loss=compute_loss,
         )
@@ -397,7 +397,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--net_name",
         type=str,
-        default="ViT-small",
+        default="Yolov5s-FedAVG",
         help="Basic Name of this run with detailed network-architecture selection. ",
     )
     parser.add_argument(
@@ -405,11 +405,6 @@ if __name__ == "__main__":
         type=str,
         default="YOLOv5-FedAVG",
         choices=[
-            "Swin-FedAVG",
-            "ViT-FedAVG",
-            "Swin-FedAVG",
-            "EfficientNet-FedAVG",
-            "ResNet-FedAVG",
             "YOLOv5-FedAVG",
         ],
         help="Choose of different FL platform.",
@@ -526,7 +521,10 @@ if __name__ == "__main__":
         "--local_epoch", default=1, type=int, help="Local training epoch in FL"
     )
     parser.add_argument(
-        "--server_local_epoch", default=10, type=int, help="Local training epoch in FL"
+        "--server_local_epoch",
+        default=1,
+        type=int,
+        help="Server local training epoch in FL",
     )
     parser.add_argument(
         "--max_communication_rounds",
