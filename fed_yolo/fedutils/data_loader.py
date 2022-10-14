@@ -81,6 +81,7 @@ def make_divisible(x, divisor):
     # Returns x evenly divisible by divisor
     return math.ceil(x / divisor) * divisor
 
+
 def img2label_paths(img_paths):
     # Define label paths as a function of image paths
     sa, sb = (
@@ -156,6 +157,7 @@ def create_dataloader(
         ),
         dataset,
     )
+
 
 class LoadImagesAndLabels(Dataset):
     # YOLOv5 train_loader/val_loader, loads images and labels for training and validation
@@ -735,6 +737,7 @@ class LoadImagesAndLabels(Dataset):
 
         return torch.stack(img4, 0), torch.cat(label4, 0), path4, shapes4
 
+
 def partition_data(data_path, partition, n_nets):
     if os.path.isfile(data_path):
         with open(data_path) as f:
@@ -754,6 +757,7 @@ def partition_data(data_path, partition, n_nets):
         # print(net_dataidx_map)
 
     return net_dataidx_map
+
 
 def non_iid_coco(label_path, client_num):
     res_bin = {}
@@ -797,6 +801,7 @@ def non_iid_coco(label_path, client_num):
     res_bin[b + 1] = np.array(list(fs_id))
     return res_bin
 
+
 def load_partition_data_custom(args, hyp, model, class_list=None):
     batch_size = args.batch_size
 
@@ -808,9 +813,7 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
     train_path = os.path.expanduser(train_path)
     test_path = os.path.expanduser(test_path)
 
-    nc, names = (
-        (int(data_dict["nc"]), data_dict["names"])
-    )  # number classes, names
+    nc, names = (int(data_dict["nc"]), data_dict["names"])  # number classes, names
     gs = int(max(model.stride))  # grid size (max stride)
     imgsz = check_img_size(args.img_size, gs, floor=gs * 2)
 
@@ -822,18 +825,18 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
     train_dataset_dict = dict()
 
     testloader = create_dataloader(
-            test_path,
-            imgsz,
-            batch_size,
-            gs,
-            hyp=hyp,
-            rect=True,
-            rank=-1,
-            pad=0.5,
-            workers=args.num_workers,
-        )[0]
+        test_path,
+        imgsz,
+        batch_size,
+        gs,
+        hyp=hyp,
+        rect=True,
+        rank=-1,
+        pad=0.5,
+        workers=args.num_workers,
+    )[0]
 
-    if args.dataset == 'per_class':
+    if args.dataset == "per_class":
         for client_idx in range(args.client_num_in_total):
             # client_idx = int(args.process_id) - 1
             train_path = data_dict["path"] + f"/train_class{class_list[client_idx]}"
@@ -853,7 +856,7 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
             train_data_loader_dict[client_idx] = dataloader
             test_data_loader_dict[client_idx] = testloader
 
-    elif args.dataset == 'all':
+    elif args.dataset == "all":
 
         client_number = args.client_num_in_total
         partition = "homo"
@@ -873,7 +876,7 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
                 net_dataidx_map=net_dataidx_map[client_idx],
                 workers=args.num_workers,
             )
-    
+
             train_dataset_dict[client_idx] = dataset
             train_data_num_dict[client_idx] = len(dataset)
             train_data_loader_dict[client_idx] = dataloader
@@ -887,7 +890,8 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
         testloader,
         nc,
     )
-    
+
+
 def load_server_data(args, hyp, model):
     batch_size = args.batch_size
 
@@ -899,35 +903,32 @@ def load_server_data(args, hyp, model):
     train_path = os.path.expanduser(train_path)
     test_path = os.path.expanduser(test_path)
 
-    nc, names = (
-        (int(data_dict["nc"]), data_dict["names"])
-    )  # number classes, names
+    nc, names = (int(data_dict["nc"]), data_dict["names"])  # number classes, names
     gs = int(max(model.stride))  # grid size (max stride)
     imgsz = check_img_size(args.img_size, gs, floor=gs * 2)
 
     trainloader, train_dataset = create_dataloader(
-                train_path,
-                imgsz,
-                batch_size,
-                gs,
-                args,
-                hyp=hyp,
-                rect=True,
-                workers=args.num_workers,
-            )
-    
-    testloader = create_dataloader(
-            test_path,
-            imgsz,
-            batch_size,
-            gs,
-            hyp=hyp,
-            rect=True,
-            rank=-1,
-            pad=0.5,
-            workers=args.num_workers,
-        )[0]
+        train_path,
+        imgsz,
+        batch_size,
+        gs,
+        args,
+        hyp=hyp,
+        rect=True,
+        workers=args.num_workers,
+    )
 
+    testloader = create_dataloader(
+        test_path,
+        imgsz,
+        batch_size,
+        gs,
+        hyp=hyp,
+        rect=True,
+        rank=-1,
+        pad=0.5,
+        workers=args.num_workers,
+    )[0]
 
     return (
         trainloader,

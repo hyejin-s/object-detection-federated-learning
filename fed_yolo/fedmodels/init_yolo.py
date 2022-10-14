@@ -25,6 +25,7 @@ except ImportError:
         "Install Weights & Biases for experiment logging via 'pip install wandb' (recommended)"
     )
 
+
 def init_yolo(args, device="cpu"):
     # init settings
     args.yolo_hyp = args.yolo_hyp or (
@@ -68,7 +69,7 @@ def init_yolo(args, device="cpu"):
             hyp["box"] = hyp.pop("giou")
 
     args.total_batch_size = args.batch_size
-    
+
     total_batch_size, weights = (args.total_batch_size, args.weights)
 
     # logging.info(f"Hyperparameters {hyp}")
@@ -100,10 +101,8 @@ def init_yolo(args, device="cpu"):
         data_dict = yaml.load(f, Loader=yaml.FullLoader)  # data dict
     train_path = data_dict["train"]
     test_path = data_dict["val"]
-    nc, names = (
-        (int(data_dict["nc"]), data_dict["names"])
-    )  # number classes, names
-    
+    nc, names = (int(data_dict["nc"]), data_dict["names"])  # number classes, names
+
     # nc, names = (
     #     (1, ["item"]) if args.single_cls else (int(data_dict["nc"]), data_dict["names"])
     # )  # number classes, names
@@ -121,9 +120,7 @@ def init_yolo(args, device="cpu"):
     if pretrained:
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
         if hyp.get("anchors"):
-            ckpt["model"].yaml["anchors"] = round(
-                hyp["anchors"]
-            )  # force autoanchor
+            ckpt["model"].yaml["anchors"] = round(hyp["anchors"])  # force autoanchor
         model = YOLOv5(args.yolo_cfg or ckpt["model"].yaml, ch=3, nc=nc).to(
             device
         )  # create
