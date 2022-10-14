@@ -4,3 +4,5 @@
 **/coco_without_classes/
 **/runs/
 **/LGE-dataset
+*.pickle
+*.png

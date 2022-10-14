@@ -251,7 +251,7 @@ def Partial_Client_Selection(args, model):
     return model_all, optimizer_all, scheduler_all
 
 
-def average_model(args,  model_avg, model_all):
+def average_model(args, model_avg, model_all, model_server, server_weight=None):
     model_avg.cpu()
     print('---- calculate the model avg ----')
     params = dict(model_avg.named_parameters())
@@ -271,11 +271,22 @@ def average_model(args,  model_avg, model_all):
                 tmp_param_data = tmp_param_data + \
                                  dict(model_all[single_client].named_parameters())[
                                      name].data * single_client_weight
+        if args.parti_server:
+            server_weight = torch.from_numpy(np.array(server_weight)).float()
+            tmp_param_data = tmp_param_data + \
+                                 dict(model_server.named_parameters())[
+                                     name].data * server_weight
+        
         params[name].data.copy_(tmp_param_data)
 
     print('---- update each client model parameters ----')
 
     for single_client in args.proxy_clients:
         tmp_params = dict(model_all[single_client].named_parameters())
+        for name, param in params.items():
+            tmp_params[name].data.copy_(param.data)
+    
+    if args.parti_server:
+        tmp_params = dict(model_server.named_parameters())
         for name, param in params.items():
             tmp_params[name].data.copy_(param.data)
