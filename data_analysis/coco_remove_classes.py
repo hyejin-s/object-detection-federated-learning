@@ -86,7 +86,9 @@ if __name__ == "__main__":
     parser.add_argument("--keep_prob", help="keep ratio", type=float, default=0.1)
     parser.add_argument(
         "--remove_class",
-        help="remove list, 56: chair, 60: dining table", nargs="+", type=int,
+        help="remove list, 56: chair, 60: dining table",
+        nargs="+",
+        type=int,
         default=[56, 60],
     )
     args = parser.parse_args()
