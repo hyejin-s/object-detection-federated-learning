@@ -112,6 +112,7 @@ def create_dataloader(
     quad=False,
     prefix="",
     shuffle=False,
+    net_dataidx_map=None,
 ):
     if rect and shuffle:
         LOGGER.warning(
@@ -132,6 +133,7 @@ def create_dataloader(
             pad=pad,
             image_weights=image_weights,
             prefix=prefix,
+            dataidxs=net_dataidx_map,
         )
 
     batch_size = min(batch_size, len(dataset))
@@ -186,6 +188,7 @@ class LoadImagesAndLabels(Dataset):
         stride=32,
         pad=0.0,
         prefix="",
+        dataidxs=None,
     ):
         self.img_size = img_size
         self.augment = augment
@@ -227,6 +230,11 @@ class LoadImagesAndLabels(Dataset):
             assert self.im_files, f"{prefix}No images found"
         except Exception as e:
             raise Exception(f"{prefix}Error loading data from {path}: {e}\n{HELP_URL}")
+        
+           # dataidxs
+        if dataidxs is not None:
+            self.im_files = [self.im_files[i - 1] for i in dataidxs]
+            self.im_files = sorted(self.im_files)
 
         # Check cache
         self.label_files = img2label_paths(self.im_files)  # labels
