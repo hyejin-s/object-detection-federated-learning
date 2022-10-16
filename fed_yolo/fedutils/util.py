@@ -4,14 +4,14 @@ import math
 import numpy as np
 from copy import deepcopy
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-
+import yaml
 
 import torch
 
 from fedutils.scheduler import setup_scheduler
 from fedmodels.yolov5.utils.loss import ComputeLoss
-
-## for optimizaer
+from fedmodels.yolov5.utils.torch_utils import smart_optimizer
+from torch.optim import lr_scheduler
 
 from torch import optim as optim
 
@@ -267,7 +267,7 @@ def optimization_fun(args, model):
     return optimizer
 
 
-def Partial_Client_Selection(args, model):
+def partial_client_selection(args, model):
 
     # Select partial clients join in FL train
     if args.num_local_clients == -1:  # all the clients joined in the train
@@ -284,26 +284,30 @@ def Partial_Client_Selection(args, model):
     scheduler_all = {}
     args.learning_rate_record = {}
     args.t_total = {}
+    
+    with open(args.yolo_hyp) as f:
+        hyp = yaml.load(f, Loader=yaml.FullLoader)
 
     for proxy_single_client in args.proxy_clients:
-        model_all[proxy_single_client] = deepcopy(model)
-        optimizer_all[proxy_single_client] = optimization_fun(
-            args, model_all[proxy_single_client]
-        )
+        model_all[proxy_single_client] = deepcopy(model).cpu()
+        
+        # Optimizer
+        nbs = 64  # nominal batch size
+        accumulate = max(round(nbs / args.batch_size), 1)  # accumulate loss before optimizing
+        hyp['weight_decay'] *= args.batch_size * accumulate / nbs 
+        optimizer_all[proxy_single_client] = smart_optimizer(model, 'SGD', args.learning_rate, hyp['momentum'], hyp['weight_decay'])
+        # optimizer_all[proxy_single_client] = optimization_fun(args, model_all[proxy_single_client])
 
         # get the total decay steps first
-        args.t_total[proxy_single_client] = (
-            args.clients_with_len[proxy_single_client]
-            * args.max_communication_rounds
-            / args.batch_size
-            * args.local_epoch
-        )
-
-        scheduler_all[proxy_single_client] = setup_scheduler(
-            args,
-            optimizer_all[proxy_single_client],
-            t_total=args.t_total[proxy_single_client],
-        )
+        if not args.dataset == 'CelebA':
+            args.t_total[proxy_single_client] = args.clients_with_len[proxy_single_client] *  args.max_communication_rounds / args.batch_size * args.local_epoch
+        else:
+            # just approximate to make sure average communication round for each client is args.max_communication_rounds
+            tmp_rounds = [math.ceil(len/32) for len in args.clients_with_len.values()]
+            args.t_total[proxy_single_client]= sum(tmp_rounds)/(args.num_local_clients-1) *  args.max_communication_rounds
+        
+        lf = lambda x: (1 - x / args.local_epoch) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
+        scheduler_all[proxy_single_client] = scheduler = lr_scheduler.LambdaLR(optimizer_all[proxy_single_client], lr_lambda=lf)
         args.learning_rate_record[proxy_single_client] = []
 
     args.clients_weights = {}
