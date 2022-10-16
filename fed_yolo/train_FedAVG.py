@@ -148,8 +148,6 @@ def train(args, model):
             compute_loss = ComputeLoss(model)
             optimizer = optimizer_all[proxy_single_client]
             scheduler = scheduler_all[proxy_single_client]
-            if args.decay_type == "step":
-                scheduler.step()
 
             print(
                 "Train the client", curr_single_client, "of communication round", epoch
@@ -212,6 +210,8 @@ def train(args, model):
                             "lr",
                             optimizer.param_groups[0]["lr"],
                         )
+                if args.decay_type == "step":
+                    scheduler.step()
         weight = None
 
         if args.parti_server:
@@ -223,9 +223,6 @@ def train(args, model):
 
             model = model_server.to(args.device).train()
             compute_loss = ComputeLoss(model)
-
-            if args.decay_type == "step":
-                scheduler_server.step()
 
             print("Train the server", "of communication round", epoch)
 
@@ -271,6 +268,8 @@ def train(args, model):
                             "lr",
                             optimizer_server.param_groups[0]["lr"],
                         )
+            if args.decay_type == "step":
+                scheduler_server.step()
 
             # we use frequent transfer of model between GPU and CPU due to limitation of GPU memory
             # model.to('cpu')
