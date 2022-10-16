@@ -70,6 +70,10 @@ VID_FORMATS = [
     "mpg",
     "wmv",
 ]  # include video suffixes
+BAR_FORMAT = "{l_bar}{bar:10}{r_bar}{bar:-10b}"  # tqdm bar format
+LOCAL_RANK = int(
+    os.getenv("LOCAL_RANK", -1)
+)  # https://pytorch.org/docs/stable/elastic/run.html
 
 # Get orientation exif tag
 for orientation in ExifTags.TAGS.keys():
@@ -80,6 +84,7 @@ for orientation in ExifTags.TAGS.keys():
 def make_divisible(x, divisor):
     # Returns x evenly divisible by divisor
     return math.ceil(x / divisor) * divisor
+
 
 def img2label_paths(img_paths):
     # Define label paths as a function of image paths
@@ -107,7 +112,6 @@ def create_dataloader(
     quad=False,
     prefix="",
     shuffle=False,
-    net_dataidx_map=None,
 ):
     if rect and shuffle:
         LOGGER.warning(
@@ -128,7 +132,6 @@ def create_dataloader(
             pad=pad,
             image_weights=image_weights,
             prefix=prefix,
-            dataidxs=net_dataidx_map,
         )
 
     batch_size = min(batch_size, len(dataset))
@@ -157,9 +160,17 @@ def create_dataloader(
         dataset,
     )
 
+
 class LoadImagesAndLabels(Dataset):
     # YOLOv5 train_loader/val_loader, loads images and labels for training and validation
     cache_version = 0.6  # dataset labels *.cache version
+    rand_interp_methods = [
+        cv2.INTER_NEAREST,
+        cv2.INTER_LINEAR,
+        cv2.INTER_CUBIC,
+        cv2.INTER_AREA,
+        cv2.INTER_LANCZOS4,
+    ]
 
     def __init__(
         self,
@@ -175,7 +186,6 @@ class LoadImagesAndLabels(Dataset):
         stride=32,
         pad=0.0,
         prefix="",
-        dataidxs=None,
     ):
         self.img_size = img_size
         self.augment = augment
@@ -188,7 +198,7 @@ class LoadImagesAndLabels(Dataset):
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
         self.path = path
-        self.albumentations = Albumentations() if augment else None
+        self.albumentations = Albumentations(size=img_size) if augment else None
 
         try:
             f = []  # image files
@@ -207,61 +217,65 @@ class LoadImagesAndLabels(Dataset):
                         ]  # local to global path
                         # f += [p.parent / x.lstrip(os.sep) for x in t]  # local to global path (pathlib)
                 else:
-                    raise Exception(f"{prefix}{p} does not exist")
-            self.img_files = sorted(
+                    raise FileNotFoundError(f"{prefix}{p} does not exist")
+            self.im_files = sorted(
                 x.replace("/", os.sep)
                 for x in f
                 if x.split(".")[-1].lower() in IMG_FORMATS
             )
             # self.img_files = sorted([x for x in f if x.suffix[1:].lower() in IMG_FORMATS])  # pathlib
-            assert self.img_files, f"{prefix}No images found"
+            assert self.im_files, f"{prefix}No images found"
         except Exception as e:
-            raise Exception(
-                f"{prefix}Error loading data from {path}: {e}\nSee {HELP_URL}"
-            )
-
-        # dataidxs
-        if dataidxs is not None:
-            self.img_files = [self.img_files[i - 1] for i in dataidxs]
-            self.img_files = sorted(self.img_files)
-
-        self.data_size = len(self.img_files)
-        self.label_files = img2label_paths(self.img_files)  # labels
+            raise Exception(f"{prefix}Error loading data from {path}: {e}\n{HELP_URL}")
 
         # Check cache
+        self.label_files = img2label_paths(self.im_files)  # labels
         cache_path = (
             p if p.is_file() else Path(self.label_files[0]).parent
         ).with_suffix(".cache")
-        cache, exists = self.cache_labels(cache_path, prefix), False
-        # try:
-        #     cache, exists = np.load(cache_path, allow_pickle=True).item(), True  # load dict
-        #     assert cache["version"] == self.cache_version  # same version
-        #     assert cache["hash"] == get_hash(self.label_files + self.img_files)  # same hash
-        # except Exception:
-        #     cache, exists = self.cache_labels(cache_path, prefix), False  # cache
+        try:
+            cache, exists = (
+                np.load(cache_path, allow_pickle=True).item(),
+                True,
+            )  # load dict
+            assert cache["version"] == self.cache_version  # matches current version
+            assert cache["hash"] == get_hash(
+                self.label_files + self.im_files
+            )  # identical hash
+        except Exception:
+            cache, exists = (
+                self.cache_labels(cache_path, prefix),
+                False,
+            )  # run cache ops
 
         # Display cache
         nf, nm, ne, nc, n = cache.pop(
             "results"
         )  # found, missing, empty, corrupt, total
-        # if exists:
-        #     d = f"Scanning '{cache_path}' images and labels... {nf} found, {nm} missing, {ne} empty, {nc} corrupt"
-        #     tqdm(None, desc=prefix + d, total=n, initial=n)  # display cache results
-        #     if cache["msgs"]:
-        #         LOGGER.info("\n".join(cache["msgs"]))  # display warnings
+        if exists and LOCAL_RANK in {-1, 0}:
+            d = f"Scanning '{cache_path}' images and labels... {nf} found, {nm} missing, {ne} empty, {nc} corrupt"
+            tqdm(
+                None, desc=prefix + d, total=n, initial=n, bar_format=BAR_FORMAT
+            )  # display cache results
+            if cache["msgs"]:
+                LOGGER.info("\n".join(cache["msgs"]))  # display warnings
         assert (
             nf > 0 or not augment
-        ), f"{prefix}No labels in {cache_path}. Can not train without labels. See {HELP_URL}"
+        ), f"{prefix}No labels found in {cache_path}, can not start training. {HELP_URL}"
 
         # Read cache
         [cache.pop(k) for k in ("hash", "version", "msgs")]  # remove items
         labels, shapes, self.segments = zip(*cache.values())
+        nl = len(np.concatenate(labels, 0))  # number of labels
+        assert (
+            nl > 0 or not augment
+        ), f"{prefix}All labels empty in {cache_path}, can not start training. {HELP_URL}"
         self.labels = list(labels)
-        self.shapes = np.array(shapes, dtype=np.float64)
-        self.img_files = list(cache.keys())  # update
+        self.shapes = np.array(shapes)
+        self.im_files = list(cache.keys())  # update
         self.label_files = img2label_paths(cache.keys())  # update
         n = len(shapes)  # number of images
-        bi = np.floor(np.arange(n) / batch_size).astype(np.int)  # batch index
+        bi = np.floor(np.arange(n) / batch_size).astype(int)  # batch index
         nb = bi[-1] + 1  # number of batches
         self.batch = bi  # batch index of image
         self.n = n
@@ -287,9 +301,10 @@ class LoadImagesAndLabels(Dataset):
             s = self.shapes  # wh
             ar = s[:, 1] / s[:, 0]  # aspect ratio
             irect = ar.argsort()
-            self.img_files = [self.img_files[i] for i in irect]
+            self.im_files = [self.im_files[i] for i in irect]
             self.label_files = [self.label_files[i] for i in irect]
             self.labels = [self.labels[i] for i in irect]
+            self.segments = [self.segments[i] for i in irect]
             self.shapes = s[irect]  # wh
             ar = ar[irect]
 
@@ -304,38 +319,35 @@ class LoadImagesAndLabels(Dataset):
                     shapes[i] = [1, 1 / mini]
 
             self.batch_shapes = (
-                np.ceil(np.array(shapes) * img_size / stride + pad).astype(np.int)
-                * stride
+                np.ceil(np.array(shapes) * img_size / stride + pad).astype(int) * stride
             )
 
         # Cache images into RAM/disk for faster training (WARNING: large datasets may exceed system resources)
-        self.imgs, self.img_npy = [None] * n, [None] * n
+        self.ims = [None] * n
+        self.npy_files = [Path(f).with_suffix(".npy") for f in self.im_files]
         if cache_images:
-            if cache_images == "disk":
-                self.im_cache_dir = Path(
-                    Path(self.img_files[0]).parent.as_posix() + "_npy"
-                )
-                self.img_npy = [
-                    self.im_cache_dir / Path(f).with_suffix(".npy").name
-                    for f in self.img_files
-                ]
-                self.im_cache_dir.mkdir(parents=True, exist_ok=True)
             gb = 0  # Gigabytes of cached images
-            self.img_hw0, self.img_hw = [None] * n, [None] * n
-            results = ThreadPool(NUM_THREADS).imap(self.load_image, range(n))
-            pbar = tqdm(enumerate(results), total=n)
+            self.im_hw0, self.im_hw = [None] * n, [None] * n
+            fcn = (
+                self.cache_images_to_disk if cache_images == "disk" else self.load_image
+            )
+            results = ThreadPool(NUM_THREADS).imap(fcn, range(n))
+            pbar = tqdm(
+                enumerate(results),
+                total=n,
+                bar_format=BAR_FORMAT,
+                disable=LOCAL_RANK > 0,
+            )
             for i, x in pbar:
                 if cache_images == "disk":
-                    if not self.img_npy[i].exists():
-                        np.save(self.img_npy[i].as_posix(), x[0])
-                    gb += self.img_npy[i].stat().st_size
+                    gb += self.npy_files[i].stat().st_size
                 else:  # 'ram'
                     (
-                        self.imgs[i],
-                        self.img_hw0[i],
-                        self.img_hw[i],
+                        self.ims[i],
+                        self.im_hw0[i],
+                        self.im_hw[i],
                     ) = x  # im, hw_orig, hw_resized = load_image(self, i)
-                    gb += self.imgs[i].nbytes
+                    gb += self.ims[i].nbytes
                 pbar.desc = f"{prefix}Caching images ({gb / 1E9:.1f}GB {cache_images})"
             pbar.close()
 
@@ -354,10 +366,11 @@ class LoadImagesAndLabels(Dataset):
             pbar = tqdm(
                 pool.imap(
                     verify_image_label,
-                    zip(self.img_files, self.label_files, repeat(prefix)),
+                    zip(self.im_files, self.label_files, repeat(prefix)),
                 ),
                 desc=desc,
-                total=len(self.img_files),
+                total=len(self.im_files),
+                bar_format=BAR_FORMAT,
             )
             for im_file, lb, shape, segments, nm_f, nf_f, ne_f, nc_f, msg in pbar:
                 nm += nm_f
@@ -374,11 +387,9 @@ class LoadImagesAndLabels(Dataset):
         if msgs:
             LOGGER.info("\n".join(msgs))
         if nf == 0:
-            LOGGER.warning(
-                f"{prefix}WARNING: No labels found in {path}. See {HELP_URL}"
-            )
-        x["hash"] = get_hash(self.label_files + self.img_files)
-        x["results"] = nf, nm, ne, nc, len(self.img_files)
+            LOGGER.warning(f"{prefix}WARNING ⚠️ No labels found in {path}. {HELP_URL}")
+        x["hash"] = get_hash(self.label_files + self.im_files)
+        x["results"] = nf, nm, ne, nc, len(self.im_files)
         x["msgs"] = msgs  # warnings
         x["version"] = self.cache_version  # cache version
         try:
@@ -387,12 +398,12 @@ class LoadImagesAndLabels(Dataset):
             LOGGER.info(f"{prefix}New cache created: {path}")
         except Exception as e:
             LOGGER.warning(
-                f"{prefix}WARNING: Cache directory {path.parent} is not writeable: {e}"
+                f"{prefix}WARNING ⚠️ Cache directory {path.parent} is not writeable: {e}"
             )  # not writeable
         return x
 
     def __len__(self):
-        return len(self.img_files)
+        return len(self.im_files)
 
     # def __iter__(self):
     #     self.count = -1
@@ -482,36 +493,34 @@ class LoadImagesAndLabels(Dataset):
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
 
-        return torch.from_numpy(img), labels_out, self.img_files[index], shapes
+        return torch.from_numpy(img), labels_out, self.im_files[index], shapes
 
     def load_image(self, i):
-        # loads 1 image from dataset index 'i', returns (im, original hw, resized hw)
-        im = self.imgs[i]
+        # Loads 1 image from dataset index 'i', returns (im, original hw, resized hw)
+        im, f, fn = (
+            self.ims[i],
+            self.im_files[i],
+            self.npy_files[i],
+        )
         if im is None:  # not cached in RAM
-            npy = self.img_npy[i]
-            if npy and npy.exists():  # load npy
-                im = np.load(npy)
+            if fn.exists():  # load npy
+                im = np.load(fn)
             else:  # read image
-                f = self.img_files[i]
                 im = cv2.imread(f)  # BGR
                 assert im is not None, f"Image Not Found {f}"
             h0, w0 = im.shape[:2]  # orig hw
             r = self.img_size / max(h0, w0)  # ratio
             if r != 1:  # if sizes are not equal
-                im = cv2.resize(
-                    im,
-                    (int(w0 * r), int(h0 * r)),
-                    interpolation=cv2.INTER_LINEAR
-                    if (self.augment or r > 1)
-                    else cv2.INTER_AREA,
-                )
+                interp = cv2.INTER_LINEAR if (self.augment or r > 1) else cv2.INTER_AREA
+                im = cv2.resize(im, (int(w0 * r), int(h0 * r)), interpolation=interp)
             return im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
-        else:
-            return (
-                self.imgs[i],
-                self.img_hw0[i],
-                self.img_hw[i],
-            )  # im, hw_original, hw_resized
+        return self.ims[i], self.im_hw0[i], self.im_hw[i]  # im, hw_original, hw_resized
+
+    def cache_images_to_disk(self, i):
+        # Saves an image as an *.npy file for faster loading
+        f = self.npy_files[i]
+        if not f.exists():
+            np.save(f.as_posix(), cv2.imread(self.im_files[i]))
 
     def load_mosaic(self, index):
         # YOLOv5 4-mosaic loader. Loads 1 image + 3 random images into a 4-image mosaic
@@ -683,16 +692,16 @@ class LoadImagesAndLabels(Dataset):
 
     @staticmethod
     def collate_fn(batch):
-        img, label, path, shapes = zip(*batch)  # transposed
+        im, label, path, shapes = zip(*batch)  # transposed
         for i, lb in enumerate(label):
             lb[:, 0] = i  # add target image index for build_targets()
-        return torch.stack(img, 0), torch.cat(label, 0), path, shapes
+        return torch.stack(im, 0), torch.cat(label, 0), path, shapes
 
     @staticmethod
     def collate_fn4(batch):
-        img, label, path, shapes = zip(*batch)  # transposed
+        im, label, path, shapes = zip(*batch)  # transposed
         n = len(shapes) // 4
-        img4, label4, path4, shapes4 = [], [], path[:n], shapes[:n]
+        im4, label4, path4, shapes4 = [], [], path[:n], shapes[:n]
 
         ho = torch.tensor([[0.0, 0, 0, 1, 0, 0]])
         wo = torch.tensor([[0.0, 0, 1, 0, 0, 0]])
@@ -700,18 +709,18 @@ class LoadImagesAndLabels(Dataset):
         for i in range(n):  # zidane torch.zeros(16,3,720,1280)  # BCHW
             i *= 4
             if random.random() < 0.5:
-                im = F.interpolate(
-                    img[i].unsqueeze(0).float(),
+                im1 = F.interpolate(
+                    im[i].unsqueeze(0).float(),
                     scale_factor=2.0,
                     mode="bilinear",
                     align_corners=False,
-                )[0].type(img[i].type())
+                )[0].type(im[i].type())
                 lb = label[i]
             else:
-                im = torch.cat(
+                im1 = torch.cat(
                     (
-                        torch.cat((img[i], img[i + 1]), 1),
-                        torch.cat((img[i + 2], img[i + 3]), 1),
+                        torch.cat((im[i], im[i + 1]), 1),
+                        torch.cat((im[i + 2], im[i + 3]), 1),
                     ),
                     2,
                 )
@@ -727,13 +736,14 @@ class LoadImagesAndLabels(Dataset):
                     )
                     * s
                 )
-            img4.append(im)
+            im4.append(im1)
             label4.append(lb)
 
         for i, lb in enumerate(label4):
             lb[:, 0] = i  # add target image index for build_targets()
 
-        return torch.stack(img4, 0), torch.cat(label4, 0), path4, shapes4
+        return torch.stack(im4, 0), torch.cat(label4, 0), path4, shapes4
+
 
 def partition_data(data_path, partition, n_nets):
     if os.path.isfile(data_path):
@@ -754,6 +764,7 @@ def partition_data(data_path, partition, n_nets):
         # print(net_dataidx_map)
 
     return net_dataidx_map
+
 
 def non_iid_coco(label_path, client_num):
     res_bin = {}
@@ -797,6 +808,7 @@ def non_iid_coco(label_path, client_num):
     res_bin[b + 1] = np.array(list(fs_id))
     return res_bin
 
+
 def load_partition_data_custom(args, hyp, model, class_list=None):
     batch_size = args.batch_size
 
@@ -808,9 +820,7 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
     train_path = os.path.expanduser(train_path)
     test_path = os.path.expanduser(test_path)
 
-    nc, names = (
-        (int(data_dict["nc"]), data_dict["names"])
-    )  # number classes, names
+    nc, names = (int(data_dict["nc"]), data_dict["names"])  # number classes, names
     gs = int(max(model.stride))  # grid size (max stride)
     imgsz = check_img_size(args.img_size, gs, floor=gs * 2)
 
@@ -822,18 +832,18 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
     train_dataset_dict = dict()
 
     testloader = create_dataloader(
-            test_path,
-            imgsz,
-            batch_size,
-            gs,
-            hyp=hyp,
-            rect=True,
-            rank=-1,
-            pad=0.5,
-            workers=args.num_workers,
-        )[0]
+        test_path,
+        imgsz,
+        batch_size,
+        gs,
+        hyp=hyp,
+        rect=True,
+        rank=-1,
+        pad=0.5,
+        workers=args.num_workers,
+    )[0]
 
-    if args.dataset == 'per_class':
+    if args.dataset == "per_class":
         for client_idx in range(args.client_num_in_total):
             # client_idx = int(args.process_id) - 1
             train_path = data_dict["path"] + f"/train_class{class_list[client_idx]}"
@@ -853,7 +863,7 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
             train_data_loader_dict[client_idx] = dataloader
             test_data_loader_dict[client_idx] = testloader
 
-    elif args.dataset == 'all':
+    elif args.dataset == "all":
 
         client_number = args.client_num_in_total
         partition = "homo"
@@ -873,7 +883,7 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
                 net_dataidx_map=net_dataidx_map[client_idx],
                 workers=args.num_workers,
             )
-    
+
             train_dataset_dict[client_idx] = dataset
             train_data_num_dict[client_idx] = len(dataset)
             train_data_loader_dict[client_idx] = dataloader
@@ -887,7 +897,8 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
         testloader,
         nc,
     )
-    
+
+
 def load_server_data(args, hyp, model):
     batch_size = args.batch_size
 
@@ -899,35 +910,32 @@ def load_server_data(args, hyp, model):
     train_path = os.path.expanduser(train_path)
     test_path = os.path.expanduser(test_path)
 
-    nc, names = (
-        (int(data_dict["nc"]), data_dict["names"])
-    )  # number classes, names
+    nc, names = (int(data_dict["nc"]), data_dict["names"])  # number classes, names
     gs = int(max(model.stride))  # grid size (max stride)
     imgsz = check_img_size(args.img_size, gs, floor=gs * 2)
 
     trainloader, train_dataset = create_dataloader(
-                train_path,
-                imgsz,
-                batch_size,
-                gs,
-                args,
-                hyp=hyp,
-                rect=True,
-                workers=args.num_workers,
-            )
-    
-    testloader = create_dataloader(
-            test_path,
-            imgsz,
-            batch_size,
-            gs,
-            hyp=hyp,
-            rect=True,
-            rank=-1,
-            pad=0.5,
-            workers=args.num_workers,
-        )[0]
+        train_path,
+        imgsz,
+        batch_size,
+        gs,
+        args,
+        hyp=hyp,
+        rect=True,
+        workers=args.num_workers,
+    )
 
+    testloader = create_dataloader(
+        test_path,
+        imgsz,
+        batch_size,
+        gs,
+        hyp=hyp,
+        rect=True,
+        rank=-1,
+        pad=0.5,
+        workers=args.num_workers,
+    )[0]
 
     return (
         trainloader,

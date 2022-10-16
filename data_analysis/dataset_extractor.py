@@ -17,7 +17,7 @@ class CocoCustomizeExcept:
             if not os.path.exists(directory):
                 os.makedirs(directory)
         except OSError:
-            print('Error: Creating directory.'+ directory)
+            print("Error: Creating directory." + directory)
 
     def read_file(self, file_name):
         """
@@ -50,7 +50,7 @@ class CocoCustomizeExcept:
         Remove the class except collect_class_list in total dataset.
         Then, save that imgs and labels.
         """
-        for file in tqdm(self.file_list): ## labels
+        for file in tqdm(self.file_list):  ## labels
             after_remove_list = self.class_removal(
                 file, collect_class_list
             )  ### check class in file
@@ -60,7 +60,7 @@ class CocoCustomizeExcept:
                 for i in range(len(after_remove_list)):
                     obj_class = int(after_remove_list[i].split()[0])
                     obj_list.append(obj_class)
-                obj_list_uniq = np.unique(obj_list) 
+                obj_list_uniq = np.unique(obj_list)
 
                 """ save imgs and labels for each classes """
                 for obj in obj_list_uniq:
@@ -69,23 +69,23 @@ class CocoCustomizeExcept:
                     ]
                     label_path = os.path.join(save_dir, f"labels/train_class{obj}/")
                     self.create_dir(label_path)
-                    with open(
-                        f"{label_path}{file}", "w+"
-                    ) as f:
+                    with open(f"{label_path}{file}", "w+") as f:
                         for j in labels_list:
                             f.write(j)
                             f.write("\n")
                     img_path = os.path.join(save_dir, f"images/train_class{obj}/")
                     self.create_dir(img_path)
                     img_name = file.split(".")[0] + ".jpg"
-                    shutil.copy(
-                        data_dir + f"images/train2017/{img_name}", img_path
-                    )
+                    shutil.copy(data_dir + f"images/train2017/{img_name}", img_path)
+
 
 def main(args):
 
     train_data = CocoCustomizeExcept(args.data_dir, "labels/train2017")
-    train_data.collect_data(args.data_dir, args.save_dir, args.extract_class) # 56: chair, 60: dining table
+    train_data.collect_data(
+        args.data_dir, args.save_dir, args.extract_class
+    )  # 56: chair, 60: dining table
+
 
 if __name__ == "__main__":
 
@@ -99,7 +99,9 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str, default="/hdd/hdd3/coco/")
     parser.add_argument(
         "--extract_class",
-        help="extract list, 56: chair, 60: dining table", nargs="+", type=int,
+        help="extract list, 56: chair, 60: dining table",
+        nargs="+",
+        type=int,
         default=[56, 60],
     )
 

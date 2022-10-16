@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 import argparse
 
+
 class DatasetDist:
     def __init__(self, data_path, partition="train2017"):
         self.data_path = data_path
@@ -46,15 +47,16 @@ class DatasetDist:
                 else:
                     class_dic[i] = 1
 
-        with open(save_name+".pickle", "wb") as f:
+        with open(save_name + ".pickle", "wb") as f:
             pickle.dump(class_dic, f)
 
         return class_dic
 
+
 def main(args):
-    
+
     if args.dist:
-        with open(args.name+".pickle", "rb") as f:
+        with open(args.name + ".pickle", "rb") as f:
             class_dic = pickle.load(f)
         print("===== sucess to read pickle file =====")
 
@@ -64,7 +66,7 @@ def main(args):
         dataset = DatasetDist(args.data_dir, args.name)
         dataset.count_class(args.name)
 
-        with open(args.name+".pickle", "rb") as f:
+        with open(args.name + ".pickle", "rb") as f:
             class_dic = pickle.load(f)
 
         print(class_dic)
@@ -90,17 +92,23 @@ def main(args):
         # plt.title('COCO train dataset class distribution (ratio)', fontsize=25)
         # plt.savefig(args.name+'_ratio.png')
 
-        
-
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, default="/hdd/hdd3/coco_custom/labels")
-    parser.add_argument("--name", help="folder name which wants to analyze", type=str, default="train2017")
-    parser.add_argument("--dist", help="if pickle file is already saved and only prints", default=False)
-    parser.add_argument("--ratio", help="ratio; data distribution", default=False)
-    
+
+    parser.add_argument(
+        "--name",
+        help="folder name which wants to analyze",
+        type=str,
+        default="train2017",
+    )
+    parser.add_argument(
+        "--dist", help="if pickle file is already saved and only prints", default=False
+    )
+    parser.add_argument(
+        "--ratio", help="ratio; data distribution", default=False
+    )
+
     args = parser.parse_args()
     main(args)
-
-    

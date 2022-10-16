@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 
 import os
 from pickle import TRUE
-import warnings 
+import warnings
 import argparse
 import numpy as np
 from copy import deepcopy
@@ -20,16 +20,18 @@ from fedmodels.yolov5.utils.general import check_amp
 import fedmodels.yolov5.val as validate
 
 from fedutils.data_loader import load_partition_data_custom, load_server_data
+
 from fedutils.util import partial_client_selection, average_model
 from fedutils.start_config import initization_configure
+
 from fedutils.scheduler import setup_scheduler
 
 
 def train(args, model):
-    """ train the model """
+    """train the model"""
     os.makedirs(args.output_dir, exist_ok=True)
     writer = SummaryWriter(log_dir=os.path.join(args.output_dir, "logs"))
-    
+
     # prepare dataset ----------
     with open(args.yolo_hyp) as f:
         hyp = yaml.load(f, Loader=yaml.FullLoader)  # load hyps
@@ -39,9 +41,9 @@ def train(args, model):
                 % (args.yolo_hyp, "https://github.com/ultralytics/yolov5/pull/1120")
             )
             hyp["box"] = hyp.pop("giou")
-    
+
     dataset = load_partition_data_custom(args, hyp, model, args.class_list)
-    [ 
+    [
         train_dataset_dict,
         train_data_num_dict,
         train_data_loader_dict,
@@ -49,12 +51,14 @@ def train(args, model):
         test_loader,
         args.num_classes,
     ] = dataset
-    
+
     server_loader, server_dataset, _, _ = load_server_data(args, hyp, model)
 
     args.dis_cvs_files = list(train_dataset_dict.keys())
-    args.clients_with_len = {name: train_data_num_dict[name] for name in args.dis_cvs_files}
-    
+    args.clients_with_len = {
+        name: train_data_num_dict[name] for name in args.dis_cvs_files
+    }
+
     model.to(args.device)
     compute_loss = ComputeLoss(model)
 
@@ -64,7 +68,7 @@ def train(args, model):
     # save file path ----------
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
-    
+
     num = 1
     exp_dir = os.path.join(args.save_dir, f"exp{num}")
     while os.path.exists(exp_dir):
@@ -100,6 +104,7 @@ def train(args, model):
     with open(f"{exp_dir}/server.txt", "a+") as f:
         f.write(str(initial_results))
         f.write("\n")
+
     
     with open(args.yolo_hyp) as f:
         hyp = yaml.load(f, Loader=yaml.FullLoader)  # load hyps
@@ -121,6 +126,7 @@ def train(args, model):
     scaler = torch.cuda.amp.GradScaler(enabled=amp)
     
     model_avg = deepcopy(model).cpu() # server
+
 
     # train
     print("=============== running training ===============")
@@ -214,6 +220,7 @@ def train(args, model):
                             "lr",
                             optimizer_server.param_groups[0]["lr"],
                         )
+
                                
                 scheduler_server.step()
 
@@ -257,12 +264,14 @@ def train(args, model):
             optimizer = optimizer_all[proxy_single_client]
             scheduler = scheduler_all[proxy_single_client]
 
+
             print(
                 "Train the client", curr_single_client, "of communication round", epoch
             )
             
             amp = check_amp(optimizer)    
             scaler = torch.cuda.amp.GradScaler(enabled=amp)
+
 
             for inner_epoch in range(args.local_epoch):
                 
@@ -353,7 +362,7 @@ def train(args, model):
                 plots=False,
                 compute_loss=compute_loss,
             )
-            
+
         # evaluate fine-tuning server's result
         if args.parti_server:
             model_server.to(args.device)
@@ -369,11 +378,11 @@ def train(args, model):
                 plots=False,
                 compute_loss=compute_loss,
             )
-            
+
             with open(f"{exp_dir}/server_fine_tuning.txt", "a+") as f:
                 f.write(str(results_server))
                 f.write("\n")
-            
+
         # average model
         if args.parti_server:
             average_model(args, model_avg, model_all, model_server, server_weight)
@@ -418,7 +427,7 @@ def train(args, model):
 
 
 def main(args):
-    
+
     if args.parti_server:
         print("Train with server")
     else:
@@ -426,6 +435,7 @@ def main(args):
     # Initialization
     model = initization_configure(args)
     
+
     # Training, Validating, and Testing
     train(args, model)
 
@@ -441,9 +451,10 @@ def main(args):
 
     print(message)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    
+
     # General DL parameters
     parser.add_argument(
         "--net_name",
@@ -545,7 +556,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--decay_type",
         choices=["cosine", "linear", "step"],
-        default="cosine",
+        default="step",
         help="How to decay the learning rate.",
     )
     parser.add_argument(
@@ -581,7 +592,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--max_communication_rounds",
-        default=100,
+        default=50,
         type=int,
         help="Total communication rounds",
     )
@@ -594,10 +605,15 @@ if __name__ == "__main__":
     )
     # parser.add_argument("--split_type", type=str, choices=["split_1", "split_2", "split_3", "real", "central"], default="split_3", help="Which data partitions to use")
     parser.add_argument("--client_num_in_total", type=int, default=2, help=",,")
-    parser.add_argument("--class_list", nargs='+', default=[56, 60], help="56: chair, 60: table")
-    
-    parser.add_argument("--parti_server", default=True, help="whether server participate training with server dataset")
-    
+    parser.add_argument(
+        "--class_list", nargs="+", default=[56, 60], help="56: chair, 60: table"
+    )
+
+    parser.add_argument(
+        "--parti_server",
+        default=True,
+        help="whether server participate training with server dataset",
+    )
 
     ## YOLO hyperparameters
     parser.add_argument(
@@ -606,7 +622,12 @@ if __name__ == "__main__":
         default="/hdd/hdd3/coco_custom/no_chair_table_best.pt",
         help="initial weights path",
     )
-    parser.add_argument("--yolo_cfg", type=str, default="./fedmodels/yolov5/models/yolov5s.yaml", help="model.yaml path")
+    parser.add_argument(
+        "--yolo_cfg",
+        type=str,
+        default="./fedmodels/yolov5/models/yolov5s.yaml",
+        help="model.yaml path",
+    )
     parser.add_argument(
         "--data_conf",
         type=str,
@@ -624,8 +645,8 @@ if __name__ == "__main__":
     parser.add_argument("--shuffle", default=False, help="dataset shuffle.")
 
     # saving ------------------
-    parser.add_argument("--save_dir", default='./output/')
-    
+    parser.add_argument("--save_dir", default="./output/")
+
     args = parser.parse_args()
 
     main(args)
