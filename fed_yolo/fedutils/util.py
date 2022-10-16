@@ -307,7 +307,7 @@ def partial_client_selection(args, model):
             args.t_total[proxy_single_client]= sum(tmp_rounds)/(args.num_local_clients-1) *  args.max_communication_rounds
         
         lf = lambda x: (1 - x / args.local_epoch) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
-        scheduler_all[proxy_single_client] = scheduler = lr_scheduler.LambdaLR(optimizer_all[proxy_single_client], lr_lambda=lf)
+        scheduler_all[proxy_single_client] = lr_scheduler.LambdaLR(optimizer_all[proxy_single_client], lr_lambda=lf)
         args.learning_rate_record[proxy_single_client] = []
 
     args.clients_weights = {}

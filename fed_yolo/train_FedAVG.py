@@ -88,23 +88,22 @@ def train(args, model):
         f.write("\n")
 
     # checking initial model performace
-    initial_results, _, _ = validate.run(
-        data_dict,
-        weights=args.weights,
-        batch_size=args.batch_size,
-        imgsz=args.img_size,
-        half=True,
-        # model=model,
-        dataloader=test_loader,
-        plots=False,
-        verbose=False,
-        compute_loss=compute_loss,
-    )
+    # initial_results, _, _ = validate.run(
+    #     data_dict,
+    #     weights=args.weights,
+    #     batch_size=args.batch_size,
+    #     imgsz=args.img_size,
+    #     half=True,
+    #     # model=model,
+    #     dataloader=test_loader,
+    #     plots=False,
+    #     verbose=False,
+    #     compute_loss=compute_loss,
+    # )
 
-    with open(f"{exp_dir}/server.txt", "a+") as f:
-        f.write(str(initial_results))
-        f.write("\n")
-
+    # with open(f"{exp_dir}/server.txt", "a+") as f:
+    #     f.write(str(initial_results))
+    #     f.write("\n")
     
     with open(args.yolo_hyp) as f:
         hyp = yaml.load(f, Loader=yaml.FullLoader)  # load hyps
@@ -126,7 +125,6 @@ def train(args, model):
     scaler = torch.cuda.amp.GradScaler(enabled=amp)
     
     model_avg = deepcopy(model).cpu() # server
-
 
     # train
     print("=============== running training ===============")
@@ -164,12 +162,14 @@ def train(args, model):
             nb = len(server_loader)  # number of batches
             nw = max(round(5 * nb), 100) # hyp['warmup_epochs'] = 5
             last_opt_step = -1
-
+            
+            model_server = model_server.to(args.device)
+            compute_loss = ComputeLoss(model_server)
+            
             for inner_epoch in range(args.server_local_epoch):
                 
-                model = model_server.to(args.device).train()
-                compute_loss = ComputeLoss(model)
-                
+                model = model_server.train()
+
                 pbar = enumerate(server_loader)
                 pbar = tqdm(pbar, total=nb, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
                 
@@ -240,8 +240,8 @@ def train(args, model):
                     f.write(str(results_server))
                     f.write("\n")   
                     
-        with open(f"{exp_dir}/server_fine_tuning.txt", "a+") as f:
-            f.write("---------------------------------------------")
+            with open(f"{exp_dir}/server_fine_tuning.txt", "a+") as f:
+                f.write("---------------------------------------------")
 
         # local update
         for curr_single_client, proxy_single_client in zip(
@@ -261,21 +261,21 @@ def train(args, model):
             nw = max(round(5 * nb), 100) # hyp['warmup_epochs'] = 5
             last_opt_step = -1
             
-            model = model_all[proxy_single_client]
+            model = model_all[proxy_single_client].to(args.device)
             optimizer = optimizer_all[proxy_single_client]
-            scheduler = scheduler_all[proxy_single_client]
+            # scheduler = scheduler_all[proxy_single_client]
+            compute_loss = ComputeLoss(model)
 
             print(
                 "Train the client", curr_single_client, "of communication round", epoch
             )
             
-            amp = check_amp(model)    
-            scaler = torch.cuda.amp.GradScaler(enabled=amp)
+            # amp = check_amp(model)    
+            # scaler = torch.cuda.amp.GradScaler(enabled=amp)
             
             for inner_epoch in range(args.local_epoch):
                 
-                model = model.to(args.device).train()
-                compute_loss = ComputeLoss(model)
+                model = model.train()
                 
                 pbar = enumerate(train_loader)
                 pbar = tqdm(pbar, total=nb, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
@@ -300,15 +300,15 @@ def train(args, model):
                         loss, _ = compute_loss(pred, targets.to(args.device))  # loss scaled by batch_size
 
                     # Backward
-                    scaler.scale(loss).backward()
+                    # scaler.scale(loss).backward()
                     
-                    if ni - last_opt_step >= accumulate:
-                        scaler.unscale_(optimizer)  # unscale gradients
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)  # clip gradients
-                        scaler.step(optimizer)  # optimizer.step
-                        scaler.update()
-                        optimizer.zero_grad()
-                        last_opt_step = ni
+                    # if ni - last_opt_step >= accumulate:
+                    #     scaler.unscale_(optimizer)  # unscale gradients
+                    #     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)  # clip gradients
+                    #     scaler.step(optimizer)  # optimizer.step
+                    #     scaler.update()
+                    #     optimizer.zero_grad()
+                    #     last_opt_step = ni
 
                     if (step) % 100 == 0:
                         print(
@@ -326,12 +326,11 @@ def train(args, model):
                             "loss",
                             loss.item(),
                             "lr",
-                            optimizer_server.param_groups[0]["lr"],
+                            optimizer.param_groups[0]["lr"],
                         )
                               
-                scheduler.step()
+                # scheduler.step()
                    
-                
         weight = None
             
             # we use frequent transfer of model between GPU and CPU due to limitation of GPU memory
@@ -610,7 +609,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--parti_server",
-        default=True,
+        default=False,
         help="whether server participate training with server dataset",
     )
 
