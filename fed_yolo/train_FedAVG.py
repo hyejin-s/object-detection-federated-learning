@@ -22,7 +22,7 @@ import fedmodels.yolov5.val as validate
 from fedutils.data_loader import load_partition_data_custom, load_server_data
 
 from fedutils.util import partial_client_selection, average_model
-from fedutils.start_config import initization_configure
+from fedutils.start_config import init_configure
 
 from fedutils.scheduler import setup_scheduler
 
@@ -433,8 +433,7 @@ def main(args):
     else:
         print("Train only nodes")
     # Initialization
-    model = initization_configure(args)
-    
+    model = init_configure(args)
 
     # Training, Validating, and Testing
     train(args, model)
