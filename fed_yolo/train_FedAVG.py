@@ -494,7 +494,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--decay_type",
         choices=["cosine", "linear", "step"],
-        default="cosine",
+        default="step",
         help="How to decay the learning rate.",
     )
     parser.add_argument(
@@ -530,7 +530,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--max_communication_rounds",
-        default=100,
+        default=50,
         type=int,
         help="Total communication rounds",
     )
