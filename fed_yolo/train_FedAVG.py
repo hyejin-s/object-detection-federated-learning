@@ -250,7 +250,7 @@ def train(args, model):
             args.single_client = curr_single_client
 
             # the ratio of clients for updating the clients weights
-            args.clients_weightes[proxy_single_client] = (
+            args.clients_weights[proxy_single_client] = (
                 args.clients_with_len[curr_single_client] / curr_total_client_lens
             )
 
@@ -261,24 +261,23 @@ def train(args, model):
             nw = max(round(5 * nb), 100) # hyp['warmup_epochs'] = 5
             last_opt_step = -1
             
+            model = model_all[proxy_single_client]
             optimizer = optimizer_all[proxy_single_client]
             scheduler = scheduler_all[proxy_single_client]
-
 
             print(
                 "Train the client", curr_single_client, "of communication round", epoch
             )
             
-            amp = check_amp(optimizer)    
+            amp = check_amp(model)    
             scaler = torch.cuda.amp.GradScaler(enabled=amp)
-
-
+            
             for inner_epoch in range(args.local_epoch):
                 
-                model = model_all[proxy_single_client].to(args.device).train()
+                model = model.to(args.device).train()
                 compute_loss = ComputeLoss(model)
                 
-                pbar = enumerate(server_loader)
+                pbar = enumerate(train_loader)
                 pbar = tqdm(pbar, total=nb, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
                 
                 optimizer.zero_grad()
@@ -313,7 +312,8 @@ def train(args, model):
 
                     if (step) % 100 == 0:
                         print(
-                            "server",
+                            "client",
+                            curr_single_client,
                             step,
                             "/",
                             len(train_loader),
