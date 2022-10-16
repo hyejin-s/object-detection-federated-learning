@@ -286,27 +286,19 @@ def Partial_Client_Selection(args, model):
     args.t_total = {}
 
     for proxy_single_client in args.proxy_clients:
-        model_all[proxy_single_client] = deepcopy(model).cpu()
+        model_all[proxy_single_client] = deepcopy(model)
         optimizer_all[proxy_single_client] = optimization_fun(
             args, model_all[proxy_single_client]
         )
 
         # get the total decay steps first
-        if not args.dataset == "CelebA":
-            args.t_total[proxy_single_client] = (
-                args.clients_with_len[proxy_single_client]
-                * args.max_communication_rounds
-                / args.batch_size
-                * args.local_epoch
-            )
-        else:
-            # just approximate to make sure average communication round for each client is args.max_communication_rounds
-            tmp_rounds = [math.ceil(len / 32) for len in args.clients_with_len.values()]
-            args.t_total[proxy_single_client] = (
-                sum(tmp_rounds)
-                / (args.num_local_clients - 1)
-                * args.max_communication_rounds
-            )
+        args.t_total[proxy_single_client] = (
+            args.clients_with_len[proxy_single_client]
+            * args.max_communication_rounds
+            / args.batch_size
+            * args.local_epoch
+        )
+
         scheduler_all[proxy_single_client] = setup_scheduler(
             args,
             optimizer_all[proxy_single_client],
@@ -314,14 +306,13 @@ def Partial_Client_Selection(args, model):
         )
         args.learning_rate_record[proxy_single_client] = []
 
-    args.clients_weightes = {}
+    args.clients_weights = {}
     args.global_step_per_client = {name: 0 for name in args.proxy_clients}
 
     return model_all, optimizer_all, scheduler_all
 
 
 def average_model(args, model_avg, model_all, model_server, server_weight=None):
-    model_avg.cpu()
     print("---- calculate the model avg ----")
     params = dict(model_avg.named_parameters())
 
@@ -330,7 +321,7 @@ def average_model(args, model_avg, model_all, model_server, server_weight=None):
         for client in range(len(args.proxy_clients)):
             single_client = args.proxy_clients[client]
 
-            single_client_weight = args.clients_weightes[single_client]
+            single_client_weight = args.clients_weights[single_client]
             single_client_weight = torch.from_numpy(
                 np.array(single_client_weight)
             ).float()
