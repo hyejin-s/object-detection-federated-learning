@@ -295,7 +295,7 @@ def partial_client_selection(args, model):
         nbs = 64  # nominal batch size
         accumulate = max(round(nbs / args.batch_size), 1)  # accumulate loss before optimizing
         hyp['weight_decay'] *= args.batch_size * accumulate / nbs 
-        optimizer_all[proxy_single_client] = smart_optimizer(model, 'SGD', args.learning_rate, hyp['momentum'], hyp['weight_decay'])
+        optimizer_all[proxy_single_client] = smart_optimizer(model_all[proxy_single_client], 'SGD', args.learning_rate, hyp['momentum'], hyp['weight_decay'])
         # optimizer_all[proxy_single_client] = optimization_fun(args, model_all[proxy_single_client])
 
         # get the total decay steps first

@@ -88,22 +88,22 @@ def train(args, model):
         f.write("\n")
 
     # checking initial model performace
-    # initial_results, _, _ = validate.run(
-    #     data_dict,
-    #     weights=args.weights,
-    #     batch_size=args.batch_size,
-    #     imgsz=args.img_size,
-    #     half=True,
-    #     # model=model,
-    #     dataloader=test_loader,
-    #     plots=False,
-    #     verbose=False,
-    #     compute_loss=compute_loss,
-    # )
+    initial_results, _, _ = validate.run(
+        data_dict,
+        weights=args.weights,
+        batch_size=args.batch_size,
+        imgsz=args.img_size,
+        half=True,
+        # model=model,
+        dataloader=test_loader,
+        plots=False,
+        verbose=False,
+        compute_loss=compute_loss,
+    )
 
-    # with open(f"{exp_dir}/server.txt", "a+") as f:
-    #     f.write(str(initial_results))
-    #     f.write("\n")
+    with open(f"{exp_dir}/server.txt", "a+") as f:
+        f.write(str(initial_results))
+        f.write("\n")
     
     with open(args.yolo_hyp) as f:
         hyp = yaml.load(f, Loader=yaml.FullLoader)  # load hyps
@@ -116,7 +116,7 @@ def train(args, model):
     nbs = 64  # nominal batch size
     accumulate = max(round(nbs / args.batch_size), 1)  # accumulate loss before optimizing
     hyp['weight_decay'] *= args.batch_size * accumulate / nbs 
-    optimizer_server = smart_optimizer(model, 'SGD', args.learning_rate, hyp['momentum'], hyp['weight_decay'])
+    optimizer_server = smart_optimizer(model_server, 'SGD', args.learning_rate, hyp['momentum'], hyp['weight_decay'])
 
     lf = lambda x: (1 - x / args.server_local_epoch) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
     scheduler_server = lr_scheduler.LambdaLR(optimizer_server, lr_lambda=lf)  # plot_lr_scheduler(optimizer, scheduler, epochs)
@@ -168,17 +168,16 @@ def train(args, model):
             
             for inner_epoch in range(args.server_local_epoch):
                 
-                model = model_server.train()
+                model_server.train()
 
                 pbar = enumerate(server_loader)
                 pbar = tqdm(pbar, total=nb, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
-                
-                optimizer_server.zero_grad()
-                
+        
                 for step, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+                    optimizer_server.zero_grad()
                     ni = step + nb * epoch  # number integrated batches (since train start)
                     imgs = imgs.to(args.device, non_blocking=True).float() / 255  # uint8 to float32, 0-255 to 0.0-1.0
-
+                    
                     if ni <= nw:
                         xi = [0, nw]  # x interp
                         accumulate = max(1, np.interp(ni, xi, [1, nbs / args.batch_size]).round())
@@ -188,20 +187,22 @@ def train(args, model):
                             if 'momentum' in x:
                                 x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])    
                     
-                    with torch.cuda.amp.autocast(amp):
-                        pred = model(imgs)  # forward
-                        loss, _ = compute_loss(pred, targets.to(args.device))  # loss scaled by batch_size
+                    # with torch.cuda.amp.autocast(amp):
+                    pred = model_server(imgs)  # forward
+                    loss, _ = compute_loss(pred, targets.to(args.device))  # loss scaled by batch_size
 
                     # Backward
                     scaler.scale(loss).backward()
+                    # loss.backward()
+                    # optimizer_server.step()
                     
                     if ni - last_opt_step >= accumulate:
                         scaler.unscale_(optimizer_server)  # unscale gradients
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)  # clip gradients
+                        torch.nn.utils.clip_grad_norm_(model_server.parameters(), max_norm=10.0)  # clip gradients
                         scaler.step(optimizer_server)  # optimizer.step
                         scaler.update()
                         optimizer_server.zero_grad()
-                        last_opt_step = ni
+                    #     last_opt_step = ni
                         
                     if (step) % 100 == 0:
                         print(
@@ -221,7 +222,6 @@ def train(args, model):
                             optimizer_server.param_groups[0]["lr"],
                         )
 
-                               
                 scheduler_server.step()
 
                 results_server, maps, _ = validate.run(
@@ -229,7 +229,7 @@ def train(args, model):
                     batch_size=args.batch_size,
                     imgsz=args.img_size,
                     half=True,
-                    model=model,
+                    model=model_server,
                     single_cls=False,
                     dataloader=test_loader,
                     plots=False,
@@ -242,7 +242,9 @@ def train(args, model):
                     
             with open(f"{exp_dir}/server_fine_tuning.txt", "a+") as f:
                 f.write("---------------------------------------------")
-
+                f.write("\n")
+                
+        lf = lambda x: (1 - x / args.local_epoch) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
         # local update
         for curr_single_client, proxy_single_client in zip(
             curr_selected_clients, args.proxy_clients
@@ -263,19 +265,19 @@ def train(args, model):
             
             model = model_all[proxy_single_client].to(args.device)
             optimizer = optimizer_all[proxy_single_client]
-            # scheduler = scheduler_all[proxy_single_client]
+            scheduler = scheduler_all[proxy_single_client]
             compute_loss = ComputeLoss(model)
 
             print(
                 "Train the client", curr_single_client, "of communication round", epoch
             )
             
-            # amp = check_amp(model)    
-            # scaler = torch.cuda.amp.GradScaler(enabled=amp)
+            amp = check_amp(model)    
+            scaler = torch.cuda.amp.GradScaler(enabled=amp)
             
             for inner_epoch in range(args.local_epoch):
                 
-                model = model.train()
+                model.train()
                 
                 pbar = enumerate(train_loader)
                 pbar = tqdm(pbar, total=nb, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
@@ -300,15 +302,15 @@ def train(args, model):
                         loss, _ = compute_loss(pred, targets.to(args.device))  # loss scaled by batch_size
 
                     # Backward
-                    # scaler.scale(loss).backward()
+                    scaler.scale(loss).backward()
                     
-                    # if ni - last_opt_step >= accumulate:
-                    #     scaler.unscale_(optimizer)  # unscale gradients
-                    #     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)  # clip gradients
-                    #     scaler.step(optimizer)  # optimizer.step
-                    #     scaler.update()
-                    #     optimizer.zero_grad()
-                    #     last_opt_step = ni
+                    if ni - last_opt_step >= accumulate:
+                        scaler.unscale_(optimizer)  # unscale gradients
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)  # clip gradients
+                        scaler.step(optimizer)  # optimizer.step
+                        scaler.update()
+                        optimizer.zero_grad()
+                        last_opt_step = ni
 
                     if (step) % 100 == 0:
                         print(
@@ -329,7 +331,7 @@ def train(args, model):
                             optimizer.param_groups[0]["lr"],
                         )
                               
-                # scheduler.step()
+                scheduler.step()
                    
         weight = None
             
