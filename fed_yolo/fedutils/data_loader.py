@@ -849,12 +849,13 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
         rank=-1,
         pad=0.5,
         workers=args.num_workers,
+        shuffle=True
     )[0]
 
     if args.dataset == "per_class":
         for client_idx in range(args.client_num_in_total):
             # client_idx = int(args.process_id) - 1
-            train_path = data_dict["path"] + f"/train_class{class_list[client_idx]}"
+            train_path = data_dict["path"] + f"/node_{client_idx+1}_class_{class_list[client_idx]}"
             dataloader, dataset = create_dataloader(
                 train_path,
                 imgsz,
@@ -864,6 +865,7 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
                 hyp=hyp,
                 rect=True,
                 workers=args.num_workers,
+                shuffle=True
             )
 
             train_dataset_dict[client_idx] = dataset
@@ -931,6 +933,7 @@ def load_server_data(args, hyp, model):
         hyp=hyp,
         rect=True,
         workers=args.num_workers,
+        shuffle=True
     )
 
     testloader = create_dataloader(
@@ -943,6 +946,7 @@ def load_server_data(args, hyp, model):
         rank=-1,
         pad=0.5,
         workers=args.num_workers,
+        shuffle=True
     )[0]
 
     return (

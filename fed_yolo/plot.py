@@ -15,8 +15,8 @@ def read_file(file_name):
 
     return lines
 
-results = read_file('./output/exp3/server.txt')
-results_coco = read_file('./output/exp4/server.txt')
+results = read_file('./output/exp10/server.txt')
+results_coco = read_file('./output/exp6/server.txt')
 
 mAP, mAP_coco = list(), list()
 
@@ -33,8 +33,8 @@ for i, result in enumerate(results_coco):
 plt.figure(figsize=(15, 10))
 
 X = list(range(1, len(mAP) + 1))
-plt.plot(X, mAP, label="class51, 60", lw=2)
-plt.plot(X, mAP_coco[:100], label="all coco", lw=2)
+plt.plot(X, mAP[:len(mAP)], label="class56, 60", lw=2)
+# plt.plot(X, mAP_coco[:len(mAP_coco)], label="all coco", lw=2)
 plt.xlabel("Round", fontsize=20)
 plt.ylabel("mAP", fontsize=20)
 

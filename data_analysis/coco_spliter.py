@@ -65,13 +65,28 @@ class CocoSpliter:
         assert len(collect_class_list) == 2, "extract class list len should be  2"
         for file in tqdm(self.file_list):  ## labels
             obj = self.check_file_has_class(file, collect_class_list)
-            label_path = os.path.join(save_dir, f"labels/train_class_{obj}/")
-            self.create_dir(label_path)
-            shutil.copy(f"{self.dir}/{file}", label_path)
-            img_path = os.path.join(save_dir, f"images/train_class_{obj}/")
-            self.create_dir(img_path)
-            img_name = file.split(".")[0] + ".jpg"
-            shutil.copy(f"{data_dir}images/train2017/{img_name}", img_path)
+            if obj == -1:
+                label_path = os.path.join(save_dir, f"labels/server/")
+                self.create_dir(label_path)
+                shutil.copy(f"{self.dir}/{file}", label_path)
+                
+                img_path = os.path.join(save_dir, f"images/server/")
+                self.create_dir(img_path)
+                img_name = file.split(".")[0] + ".jpg"
+                shutil.copy(f"{data_dir}images/train2017/{img_name}", img_path)
+                
+            else: # for node
+                if obj == collect_class_list[0]:
+                    node = 1
+                else:
+                    node = 2
+                label_path = os.path.join(save_dir, f"labels/node_{node}_class_{obj}/")
+                self.create_dir(label_path)
+                shutil.copy(f"{self.dir}/{file}", label_path)
+                img_path = os.path.join(save_dir, f"images/node_{node}_class_{obj}/")
+                self.create_dir(img_path)
+                img_name = file.split(".")[0] + ".jpg"
+                shutil.copy(f"{data_dir}images/train2017/{img_name}", img_path)
         print(
             f"class1:{self.class1_count}\nclass2:{self.class2_count}\nclass1&2:{self.class1n2_count}"
         )
@@ -92,7 +107,7 @@ if __name__ == "__main__":
         "--save_dir",
         help="save root",
         type=str,
-        default="/hdd/hdd3/coco_custom/",
+        default="/hdd/hdd3/coco_fl/",
     )
     parser.add_argument("--data_dir", type=str, default="/hdd/hdd3/coco/")
     parser.add_argument(
