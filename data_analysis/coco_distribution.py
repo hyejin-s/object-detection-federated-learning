@@ -52,7 +52,6 @@ class DatasetDist:
 
         return class_dic
 
-
 def main(args):
 
     if args.dist:

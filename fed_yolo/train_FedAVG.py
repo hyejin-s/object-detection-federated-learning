@@ -2,9 +2,11 @@
 from __future__ import absolute_import, division, print_function
 
 import os
+import math
 from pickle import TRUE
 import warnings
 import argparse
+import random
 import numpy as np
 from copy import deepcopy
 import yaml
@@ -13,10 +15,11 @@ from tqdm import tqdm
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim import lr_scheduler
+import torch.nn as nn
 
 from fedmodels.yolov5.utils.loss import ComputeLoss
 from fedmodels.yolov5.utils.torch_utils import smart_optimizer
-from fedmodels.yolov5.utils.general import check_amp
+from fedmodels.yolov5.utils.general import check_amp, check_img_size
 import fedmodels.yolov5.val as validate
 
 from fedutils.data_loader import load_partition_data_custom, load_server_data
@@ -88,7 +91,7 @@ def train(args, model):
         f.write("\n")
 
     # checking initial model performace
-    initial_results, _, _ = validate.run(
+    initial_results, maps, _ = validate.run(
         data_dict,
         weights=args.weights,
         batch_size=args.batch_size,
@@ -105,12 +108,21 @@ def train(args, model):
         f.write(str(initial_results))
         f.write("\n")
     
+    for i in range(len(args.class_list)):
+        with open(f"{exp_dir}/server_class_{args.class_list[i]}.txt", "a+") as f:
+            f.write(str(maps[args.class_list[i]]))
+            f.write("\n")
+    
     with open(args.yolo_hyp) as f:
         hyp = yaml.load(f, Loader=yaml.FullLoader)  # load hyps
             
     # Configuration for FedAVG, prepare model, optimizer, and scheduler
     model_all, optimizer_all, scheduler_all = partial_client_selection(args, model)
     model_server = deepcopy(model).cpu() # server
+    
+    # Image size
+    gs = max(int(model_server.stride.max()), 32)  # grid size (max stride)
+    imgsz = check_img_size(args.img_size, gs, floor=gs * 2)  # verify imgsz is gs-multiple
     
     # Optimizer
     nbs = 64  # nominal batch size
@@ -119,8 +131,8 @@ def train(args, model):
     optimizer_server = smart_optimizer(model_server, 'SGD', args.learning_rate, hyp['momentum'], hyp['weight_decay'])
 
     lf = lambda x: (1 - x / args.server_local_epoch) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
-    scheduler_server = lr_scheduler.LambdaLR(optimizer_server, lr_lambda=lf)  # plot_lr_scheduler(optimizer, scheduler, epochs)
-    
+    # scheduler_server = lr_scheduler.LambdaLR(optimizer_server, lr_lambda=lf)  # plot_lr_scheduler(optimizer, scheduler, epochs)
+    # import pdb; pdb.set_trace()
     amp = check_amp(model_server)    
     scaler = torch.cuda.amp.GradScaler(enabled=amp)
     
@@ -172,37 +184,46 @@ def train(args, model):
 
                 pbar = enumerate(server_loader)
                 pbar = tqdm(pbar, total=nb, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
-        
+                optimizer_server.zero_grad()
                 for step, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
-                    optimizer_server.zero_grad()
+                    
                     ni = step + nb * epoch  # number integrated batches (since train start)
                     imgs = imgs.to(args.device, non_blocking=True).float() / 255  # uint8 to float32, 0-255 to 0.0-1.0
                     
-                    if ni <= nw:
-                        xi = [0, nw]  # x interp
-                        accumulate = max(1, np.interp(ni, xi, [1, nbs / args.batch_size]).round())
-                        for j, x in enumerate(optimizer_server.param_groups):
-                            # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
-                            x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 0 else 0.0, x['initial_lr'] * lf(epoch)])
-                            if 'momentum' in x:
-                                x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])    
+                    # Warmup
+                    # if ni <= nw:
+                    #     xi = [0, nw]  # x interp
+                    #     accumulate = max(1, np.interp(ni, xi, [1, nbs / args.batch_size]).round())
+                    #     for j, x in enumerate(optimizer_server.param_groups):
+                    #         # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
+                    #         x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 0 else 0.0, x['initial_lr'] * lf(epoch)])
+                    #         if 'momentum' in x:
+                    #             x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])    
                     
+                    # Multi-scale
+                    sz = random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs  # size
+                    sf = sz / max(imgs.shape[2:])  # scale factor
+                    if sf != 1:
+                        ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
+                        imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
+                                        
                     # with torch.cuda.amp.autocast(amp):
                     pred = model_server(imgs)  # forward
-                    loss, _ = compute_loss(pred, targets.to(args.device))  # loss scaled by batch_size
-
+                    loss, loss_item = compute_loss(pred, targets.to(args.device))  # loss scaled by batch_size
+                    
                     # Backward
                     scaler.scale(loss).backward()
                     # loss.backward()
                     # optimizer_server.step()
                     
+                    # Optimize
                     if ni - last_opt_step >= accumulate:
                         scaler.unscale_(optimizer_server)  # unscale gradients
                         torch.nn.utils.clip_grad_norm_(model_server.parameters(), max_norm=10.0)  # clip gradients
                         scaler.step(optimizer_server)  # optimizer.step
                         scaler.update()
                         optimizer_server.zero_grad()
-                    #     last_opt_step = ni
+                        last_opt_step = ni
                         
                     if (step) % 100 == 0:
                         print(
@@ -222,7 +243,7 @@ def train(args, model):
                             optimizer_server.param_groups[0]["lr"],
                         )
 
-                scheduler_server.step()
+                # scheduler_server.step()
 
                 results_server, maps, _ = validate.run(
                     data_dict,
@@ -238,11 +259,22 @@ def train(args, model):
             
                 with open(f"{exp_dir}/server_fine_tuning.txt", "a+") as f:
                     f.write(str(results_server))
-                    f.write("\n")   
-                    
+                    f.write("\n")
+                
+                for i in range(len(args.class_list)):
+                    with open(f"{exp_dir}/server_fine_tuning_class_{args.class_list[i]}.txt", "a+") as f:
+                        f.write(str(maps[args.class_list[i]]))
+                        f.write("\n")
+    
             with open(f"{exp_dir}/server_fine_tuning.txt", "a+") as f:
                 f.write("---------------------------------------------")
                 f.write("\n")
+            
+            for i in range(len(args.class_list)):
+                with open(f"{exp_dir}/server_fine_tuning_class_{args.class_list[i]}.txt", "a+") as f:
+                    f.write("---------------------------------------------")
+                    f.write("\n")
+    
                 
         lf = lambda x: (1 - x / args.local_epoch) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
         # local update
@@ -265,7 +297,7 @@ def train(args, model):
             
             model = model_all[proxy_single_client].to(args.device)
             optimizer = optimizer_all[proxy_single_client]
-            scheduler = scheduler_all[proxy_single_client]
+            # scheduler = scheduler_all[proxy_single_client]
             compute_loss = ComputeLoss(model)
 
             print(
@@ -288,29 +320,31 @@ def train(args, model):
                     ni = step + nb * epoch  # number integrated batches (since train start)
                     imgs = imgs.to(args.device, non_blocking=True).float() / 255  # uint8 to float32, 0-255 to 0.0-1.0
 
-                    if ni <= nw:
-                        xi = [0, nw]  # x interp
-                        accumulate = max(1, np.interp(ni, xi, [1, nbs / args.batch_size]).round())
-                        for j, x in enumerate(optimizer.param_groups):
-                            # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
-                            x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 0 else 0.0, x['initial_lr'] * lf(epoch)])
-                            if 'momentum' in x:
-                                x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])    
+                    # if ni <= nw:
+                    #     xi = [0, nw]  # x interp
+                    #     accumulate = max(1, np.interp(ni, xi, [1, nbs / args.batch_size]).round())
+                    #     for j, x in enumerate(optimizer.param_groups):
+                    #         # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
+                    #         x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 0 else 0.0, x['initial_lr'] * lf(epoch)])
+                    #         if 'momentum' in x:
+                    #             x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])    
                     
                     with torch.cuda.amp.autocast(amp):
                         pred = model(imgs)  # forward
                         loss, _ = compute_loss(pred, targets.to(args.device))  # loss scaled by batch_size
 
                     # Backward
-                    scaler.scale(loss).backward()
+                    # scaler.scale(loss).backward()
+                    loss.backward()
+                    optimizer.step()
                     
-                    if ni - last_opt_step >= accumulate:
-                        scaler.unscale_(optimizer)  # unscale gradients
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)  # clip gradients
-                        scaler.step(optimizer)  # optimizer.step
-                        scaler.update()
-                        optimizer.zero_grad()
-                        last_opt_step = ni
+                    # if ni - last_opt_step >= accumulate:
+                    #     scaler.unscale_(optimizer)  # unscale gradients
+                    #     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)  # clip gradients
+                    #     scaler.step(optimizer)  # optimizer.step
+                    #     scaler.update()
+                    #     optimizer.zero_grad()
+                    #     last_opt_step = ni
 
                     if (step) % 100 == 0:
                         print(
@@ -331,7 +365,30 @@ def train(args, model):
                             optimizer.param_groups[0]["lr"],
                         )
                               
-                scheduler.step()
+                # scheduler.step()
+                results_server, maps, _ = validate.run(
+                    data_dict,
+                    batch_size=args.batch_size,
+                    imgsz=args.img_size,
+                    half=True,
+                    model=model,
+                    single_cls=False,
+                    dataloader=test_loader,
+                    plots=False,
+                    compute_loss=compute_loss,
+                )
+        
+                
+                for i in range(len(args.class_list)):
+                    with open(f"{exp_dir}/fine_tuning_class_{args.class_list[i]}.txt", "a+") as f:
+                        f.write(str(maps[args.class_list[i]]))
+                        f.write("\n")
+                        
+            for i in range(len(args.class_list)):
+                    with open(f"{exp_dir}/fine_tuning_class_{args.class_list[i]}.txt", "a+") as f:
+                        f.write("---------------------------------------------")
+                        f.write("\n")
+
                    
         weight = None
             
@@ -365,24 +422,24 @@ def train(args, model):
             )
 
         # evaluate fine-tuning server's result
-        if args.parti_server:
-            model_server.to(args.device)
-            compute_loss = ComputeLoss(model_server)
-            results_server, maps, _ = validate.run(
-                data_dict,
-                batch_size=args.batch_size,
-                imgsz=args.img_size,
-                half=True,
-                model=model_server,
-                single_cls=False,
-                dataloader=test_loader,
-                plots=False,
-                compute_loss=compute_loss,
-            )
+        # if args.parti_server:
+        #     model_server.to(args.device)
+        #     compute_loss = ComputeLoss(model_server)
+        #     results_server, maps, _ = validate.run(
+        #         data_dict,
+        #         batch_size=args.batch_size,
+        #         imgsz=args.img_size,
+        #         half=True,
+        #         model=model_server,
+        #         single_cls=False,
+        #         dataloader=test_loader,
+        #         plots=False,
+        #         compute_loss=compute_loss,
+        #     )
 
-            with open(f"{exp_dir}/server_fine_tuning.txt", "a+") as f:
-                f.write(str(results_server))
-                f.write("\n")
+        #     with open(f"{exp_dir}/server_fine_tuning.txt", "a+") as f:
+        #         f.write(str(results_server))
+        #         f.write("\n")
 
         # average model
         if args.parti_server:
@@ -414,6 +471,11 @@ def train(args, model):
                 curr_selected_clients, args.proxy_clients
             ):
                 f.write(f"{proxy_single_client}: {str(results[proxy_single_client])}")
+                f.write("\n")
+                
+        for i in range(len(args.class_list)):
+            with open(f"{exp_dir}/server_class_{args.class_list[i]}.txt", "a+") as f:
+                f.write(str(maps[args.class_list[i]]))
                 f.write("\n")
 
         # writer.add_scalar("test/average_accuracy", scalar_value=np.asarray(tmp_round_acc).mean(), global_step=epoch)
