@@ -6,3 +6,5 @@
 **/LGE-dataset
 *.pickle
 *.png
+**/wandb/
+**/exp/

@@ -1547,3 +1547,62 @@
 2022-11-09 21:26:12,146 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
 2022-11-09 21:26:14,147 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
 2022-11-09 21:26:16,148 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:18,149 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:20,149 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:21,725 DEBUG   HandlerThread:1927428 [handler.py:handle_request():138] handle_request: stop_status
+2022-11-09 21:26:21,725 DEBUG   SenderThread:1927428 [sender.py:send_request():317] send_request: stop_status
+2022-11-09 21:26:22,150 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:24,151 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:26,152 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:27,152 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:28,153 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:30,153 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:30,355 DEBUG   SenderThread:1927428 [sender.py:send():303] send: stats
+2022-11-09 21:26:32,154 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:34,155 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:36,156 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:36,946 DEBUG   HandlerThread:1927428 [handler.py:handle_request():138] handle_request: stop_status
+2022-11-09 21:26:36,946 DEBUG   SenderThread:1927428 [sender.py:send_request():317] send_request: stop_status
+2022-11-09 21:26:38,156 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:40,157 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:42,158 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:44,158 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:46,159 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:48,160 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:50,161 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:52,161 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:52,164 DEBUG   HandlerThread:1927428 [handler.py:handle_request():138] handle_request: stop_status
+2022-11-09 21:26:52,165 DEBUG   SenderThread:1927428 [sender.py:send_request():317] send_request: stop_status
+2022-11-09 21:26:53,162 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:54,162 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:56,163 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:26:59,164 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:01,164 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:03,165 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:03,924 DEBUG   SenderThread:1927428 [sender.py:send():303] send: stats
+2022-11-09 21:27:05,166 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:07,166 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:07,388 DEBUG   HandlerThread:1927428 [handler.py:handle_request():138] handle_request: stop_status
+2022-11-09 21:27:07,388 DEBUG   SenderThread:1927428 [sender.py:send_request():317] send_request: stop_status
+2022-11-09 21:27:09,167 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:11,168 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:13,168 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:15,169 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:17,170 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:19,171 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:21,171 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:22,609 DEBUG   HandlerThread:1927428 [handler.py:handle_request():138] handle_request: stop_status
+2022-11-09 21:27:22,609 DEBUG   SenderThread:1927428 [sender.py:send_request():317] send_request: stop_status
+2022-11-09 21:27:23,172 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:25,173 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:27,174 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:29,175 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:31,176 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:33,176 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:35,177 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:37,178 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:37,392 DEBUG   SenderThread:1927428 [sender.py:send():303] send: stats
+2022-11-09 21:27:38,359 DEBUG   HandlerThread:1927428 [handler.py:handle_request():138] handle_request: stop_status
+2022-11-09 21:27:38,360 DEBUG   SenderThread:1927428 [sender.py:send_request():317] send_request: stop_status
+2022-11-09 21:27:39,178 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
+2022-11-09 21:27:41,179 INFO    Thread-13 :1927428 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/phj/object-detection-federated-learning/fed_yolo/wandb/run-20221109_205013-3vdz6kgz/files/output.log
