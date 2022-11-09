@@ -267,28 +267,23 @@ def optimization_fun(args, model):
     return optimizer
 
 
-def partial_client_selection(args, model):
+def partial_client_selection(args, model, hyp):
 
-    # Select partial clients join in FL train
-    if args.num_local_clients == -1:  # all the clients joined in the train
-        args.proxy_clients = args.dis_cvs_files
-        args.num_local_clients = len(
-            args.dis_cvs_files
-        )  # update the true number of clients
-    else:
-        args.proxy_clients = ["train_" + str(i) for i in range(args.num_local_clients)]
+    # # Select partial clients join in FL train
+    # if args.num_local_clients == -1:  # all the clients joined in the train
+    #     proxy_clients = args.dis_cvs_files
+    #     args.num_local_clients = len(
+    #         args.dis_cvs_files
+    #     )  # update the true number of clients
+    # else:
+    #     args.proxy_clients = ["train_" + str(i) for i in range(args.num_local_clients)]
 
     # Generate model for each client
     model_all = {}
     optimizer_all = {}
     scheduler_all = {}
-    args.learning_rate_record = {}
-    args.t_total = {}
-    
-    with open(args.yolo_hyp) as f:
-        hyp = yaml.load(f, Loader=yaml.FullLoader)
 
-    for proxy_single_client in args.proxy_clients:
+    for proxy_single_client in range(len(args.clients)):
         model_all[proxy_single_client] = deepcopy(model).cpu()
         
         # Optimizer
@@ -296,52 +291,38 @@ def partial_client_selection(args, model):
         accumulate = max(round(nbs / args.batch_size), 1)  # accumulate loss before optimizing
         hyp['weight_decay'] *= args.batch_size * accumulate / nbs 
         optimizer_all[proxy_single_client] = smart_optimizer(model_all[proxy_single_client], 'SGD', args.learning_rate, hyp['momentum'], hyp['weight_decay'])
-        # optimizer_all[proxy_single_client] = optimization_fun(args, model_all[proxy_single_client])
 
-        # get the total decay steps first
-        if not args.dataset == 'CelebA':
-            args.t_total[proxy_single_client] = args.clients_with_len[proxy_single_client] *  args.max_communication_rounds / args.batch_size * args.local_epoch
-        else:
-            # just approximate to make sure average communication round for each client is args.max_communication_rounds
-            tmp_rounds = [math.ceil(len/32) for len in args.clients_with_len.values()]
-            args.t_total[proxy_single_client]= sum(tmp_rounds)/(args.num_local_clients-1) *  args.max_communication_rounds
-        
-        # lf = lambda x: (1 - x / args.local_epoch) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
-        # scheduler_all[proxy_single_client] = lr_scheduler.LambdaLR(optimizer_all[proxy_single_client], lr_lambda=lf)
-        args.learning_rate_record[proxy_single_client] = []
-
-    args.clients_weights = {}
-    args.global_step_per_client = {name: 0 for name in args.proxy_clients}
+        lf = lambda x: (1 - x / args.local_epoch) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
+        scheduler_all[proxy_single_client] = lr_scheduler.LambdaLR(optimizer_all[proxy_single_client], lr_lambda=lf)
 
     return model_all, optimizer_all, scheduler_all
 
 
-def average_model(args, model_avg, model_all, model_server, server_weight=None):
+def average_model(args, model_avg, model_all, model_server, server_weight, clients_weights):
     print("---- calculate the model avg ----")
     params = dict(model_avg.named_parameters())
 
     # for name, value in model_state_dict.items():
     for name, param in params.items():
-        for client in range(len(args.proxy_clients)):
-            single_client = args.proxy_clients[client]
+        for client in range(len(args.clients)):
 
-            single_client_weight = args.clients_weights[single_client]
+            single_client_weight = clients_weights[client]
             single_client_weight = torch.from_numpy(
                 np.array(single_client_weight)
             ).float()
 
             if client == 0:
                 tmp_param_data = (
-                    dict(model_all[single_client].named_parameters())[name].data
+                    dict(model_all[client].named_parameters())[name].data
                     * single_client_weight
                 )
             else:
                 tmp_param_data = (
                     tmp_param_data
-                    + dict(model_all[single_client].named_parameters())[name].data
+                    + dict(model_all[client].named_parameters())[name].data
                     * single_client_weight
                 )
-        if args.parti_server:
+        if args.central:
             server_weight = torch.from_numpy(np.array(server_weight)).float()
             tmp_param_data = (
                 tmp_param_data
@@ -352,12 +333,12 @@ def average_model(args, model_avg, model_all, model_server, server_weight=None):
 
     print("---- update each client model parameters ----")
 
-    for single_client in args.proxy_clients:
-        tmp_params = dict(model_all[single_client].named_parameters())
+    for client in range(len(args.clients)):
+        tmp_params = dict(model_all[client].named_parameters())
         for name, param in params.items():
             tmp_params[name].data.copy_(param.data)
 
-    if args.parti_server:
+    if args.central:
         tmp_params = dict(model_server.named_parameters())
         for name, param in params.items():
             tmp_params[name].data.copy_(param.data)
