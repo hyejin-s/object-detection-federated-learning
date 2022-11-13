@@ -29,14 +29,13 @@ from fedutils.scheduler import setup_scheduler
 import wandb
 wandb.login()
 
-
 def project_conflicting(grads):
     pc_grad = deepcopy(grads)
-    pc_grad = [torch.sum(grad, axis=0) for grad in grads]
+    pc_grad = [np.sum(grad, axis=0) for grad in grads]
     for g_i in pc_grad:
         random.shuffle(pc_grad)
         for g_j in pc_grad:
-            g_i_g_j = torch.dot(g_i, g_j)
+            g_i_g_j = np.dot(g_i, g_j)
             if g_i_g_j < 0:
                 g_i -= (g_i_g_j) * g_j / (g_j.norm()**2)
     merged_grad = torch.zeros_like(grads[0]).to(grads[0].device)
@@ -78,6 +77,10 @@ def main(args):
             + "_seed_"
             + str(args.seed)
         )
+    
+    # gradient surgery
+    if args.grad_surgery:
+        print(" ========== gradient surgery ========== ")
     
     num = 0
     exp_dir = os.path.join(args.save_dir, f"{name}_{num}")
@@ -244,14 +247,14 @@ def main(args):
                     # Backward
                     scaler.scale(loss).backward()
                     # loss.backward()
-                    
-                    grad = []
-                    for group in optimizer_server.param_groups:
-                        for p in group['params']:
-                            if p.grad is None:
-                                grad.append(torch.zeros_like(p).to(p.device))
-                            grad.append(p.grad.clone())
-                    server_grad.append(grad)        
+                    if args.grad_surgery:
+                        grad = []
+                        for group in optimizer_server.param_groups:
+                            for p in group['params']:
+                                if p.grad is None:
+                                    grad.append(torch.zeros_like(p).to(p.device))
+                                grad.append(p.grad.clone())
+                        server_grad.append(grad)        
                     # optimizer_server.step()                    
                     
                     # Optimize
@@ -363,14 +366,15 @@ def main(args):
                     scaler.scale(loss).backward()
                     # loss.backward()
                     
-                    grad = []
-                    for group in optimizer_server.param_groups:
-                        for p in group['params']:
-                            if p.grad is None:
-                                grad.append(torch.zeros_like(p).to(p.device))
-                                continue
-                            grad.append(p.grad.clone())
-                    single_node_grad.append(grad)        
+                    if args.grad_surgery:
+                        grad = []
+                        for group in optimizer_server.param_groups:
+                            for p in group['params']:
+                                if p.grad is None:
+                                    grad.append(torch.zeros_like(p).to(p.device))
+                                    continue
+                                grad.append(p.grad.clone())
+                        single_node_grad.append(grad)        
                     # optimizer.step()
                     
                     # Optimize
@@ -415,32 +419,36 @@ def main(args):
         # import pdb; pdb.set_trace()
             
         """ ---- model average and eval ---- """
-        if args.central:
-            # average_model(args, model_avg, model_all, model_server, server_weight, clients_weights)
-            optimizer_avg.zero_grad()
-            node_grad.append(server_grad)
-            merged_grads = project_conflicting(node_grad)
-            idx = 0
-            for group in optimizer_avg.param_groups:
-                for p in group['params']:
-                    # if p.grad is None: continue
-                    p.grad = merged_grads[idx]
-                    idx += 1
-            optimizer_avg.step()
+        if args. grad_surgery:
+            if args.central:
+                optimizer_avg.zero_grad()
+                node_grad.append(server_grad)
+                merged_grads = project_conflicting(node_grad)
+                idx = 0
+                for group in optimizer_avg.param_groups:
+                    for p in group['params']:
+                        # if p.grad is None: continue
+                        p.grad = merged_grads[idx]
+                        idx += 1
+                optimizer_avg.step()
+            else:
+                optimizer_avg.zero_grad()
+                # grads = node_grad.append(server_grad)
+                merged_grads = project_conflicting(node_grad)
+                idx = 0
+                for group in optimizer_avg.param_groups:
+                    for p in group['params']:
+                        # if p.grad is None: continue
+                        p.grad = merged_grads[idx]
+                        idx += 1
+                optimizer_avg.step()
         else:
-            # weight = None
-            # average_model(args, model_avg, model_all, model_server, weight, clients_weights)
-            optimizer_avg.zero_grad()
-            # grads = node_grad.append(server_grad)
-            merged_grads = project_conflicting(node_grad)
-            idx = 0
-            for group in optimizer_avg.param_groups:
-                for p in group['params']:
-                    # if p.grad is None: continue
-                    p.grad = merged_grads[idx]
-                    idx += 1
-            optimizer_avg.step()
-            
+            if args.central:
+                average_model(args, model_avg, model_all, model_server, server_weight, clients_weights)
+            else:
+                weight=None
+                average_model(args, model_avg, model_all, model_server, weight, clients_weights)
+        
         # then evaluate server
         model_avg.to(device)
         compute_loss = ComputeLoss(model_avg)
@@ -564,6 +572,12 @@ if __name__ == "__main__":
         "--central",
         default=False,
         help="whether server participate training with server dataset",
+    )
+
+    parser.add_argument(
+        "--grad_surgery",
+        default=False,
+        help="whether applying gradient surgery",
     )
 
     ## YOLO hyperparameters
