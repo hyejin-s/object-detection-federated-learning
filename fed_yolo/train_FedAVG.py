@@ -29,6 +29,20 @@ from fedutils.scheduler import setup_scheduler
 import wandb
 wandb.login()
 
+
+def project_conflicting(grads):
+    pc_grad = deepcopy(grads)
+    pc_grad = [torch.sum(grad, axis=0) for grad in grads]
+    for g_i in pc_grad:
+        random.shuffle(pc_grad)
+        for g_j in pc_grad:
+            g_i_g_j = torch.dot(g_i, g_j)
+            if g_i_g_j < 0:
+                g_i -= (g_i_g_j) * g_j / (g_j.norm()**2)
+    merged_grad = torch.zeros_like(grads[0]).to(grads[0].device)
+
+    return merged_grad
+
 def main(args):
     
     # server participation
@@ -133,8 +147,8 @@ def main(args):
     )
     
     # log
-    for i in range(len(results_name)):
-        wandb.log({f"SERVER_RESULTS_{results_name[i]}": server_results[i]}, step=0)
+    # for i in range(len(results_name)):
+    wandb.log({f"SERVER_RESULTS_{results_name[3]}": server_results[3]}, step=0)
     for i in range(len(args.clients)):
         wandb.log({f"SERVER_CLIENTS_{i}_CLASS_{args.clients[i]}": server_maps[args.clients[i]]}, step=0)
             
@@ -159,6 +173,7 @@ def main(args):
     scaler = torch.cuda.amp.GradScaler(enabled=amp)
     
     model_avg = deepcopy(model).cpu() # average server
+    optimizer_avg = smart_optimizer(model_avg, args.optimizer_type, args.learning_rate, hyp['momentum'], hyp['weight_decay'])
 
     print("=============== start training ===============")
     for epoch in range(args.epoch):
@@ -189,6 +204,7 @@ def main(args):
             model_server = model_server.to(device)
             compute_loss = ComputeLoss(model_server)
             
+            server_grad = list()
             for inner_epoch in range(args.server_local_epoch):
                 model_server.train()
 
@@ -200,14 +216,14 @@ def main(args):
                     imgs = imgs.to(device, non_blocking=True).float() / 255  # uint8 to float32, 0-255 to 0.0-1.0
                     
                     # Warmup
-                    # if ni <= nw:
-                    #     xi = [0, nw]  # x interp
-                    #     accumulate = max(1, np.interp(ni, xi, [1, nbs / args.batch_size]).round())
-                    #     for j, x in enumerate(optimizer_server.param_groups):
-                    #         # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
-                    #         x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 0 else 0.0, x['initial_lr'] * lf(epoch)])
-                    #         if 'momentum' in x:
-                    #             x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])    
+                    if ni <= nw:
+                        xi = [0, nw]  # x interp
+                        accumulate = max(1, np.interp(ni, xi, [1, nbs / args.batch_size]).round())
+                        for j, x in enumerate(optimizer_server.param_groups):
+                            # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
+                            x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 0 else 0.0, x['initial_lr'] * lf(epoch)])
+                            if 'momentum' in x:
+                                x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])    
                     
                     # Multi-scale
                     sz = random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs  # size
@@ -219,11 +235,24 @@ def main(args):
                     # with torch.cuda.amp.autocast(amp):
                     pred = model_server(imgs)  # forward
                     loss, _ = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
+                    # grad = torch.autograd.grad(loss, model_server.parameters())
+                    # import pdb; pdb.set_trace()
+                    # if inner_epoch == 0 and step == 0:
+                    #     server_grad = deepcopy(grad)
+                    # server_grad = tuple(sum(i) for i in zip(grad, server_grad))
                     
                     # Backward
                     scaler.scale(loss).backward()
                     # loss.backward()
-                    # optimizer_server.step()
+                    
+                    grad = []
+                    for group in optimizer_server.param_groups:
+                        for p in group['params']:
+                            if p.grad is None:
+                                grad.append(torch.zeros_like(p).to(p.device))
+                            grad.append(p.grad.clone())
+                    server_grad.append(grad)        
+                    # optimizer_server.step()                    
                     
                     # Optimize
                     if ni - last_opt_step >= accumulate:
@@ -233,24 +262,8 @@ def main(args):
                         scaler.update()
                         optimizer_server.zero_grad()
                         last_opt_step = ni
-                        
-                    if (step) % 100 == 0:
-                        print(
-                            "server",
-                            step,
-                            "/",
-                            len(server_loader),
-                            "inner epoch",
-                            inner_epoch,
-                            "round",
-                            epoch,
-                            "/",
-                            args.epoch,
-                            "loss",
-                            loss.item(),
-                            "lr",
-                            optimizer_server.param_groups[0]["lr"],
-                        )
+                    
+                    wandb.log({"SERVER_LOSS": loss.item()})
 
                 # scheduler_server.step()
 
@@ -267,10 +280,9 @@ def main(args):
                 )
 
                 # log
-                wandb.log({f"SERVER_INNER_RESULTS_{results_name[3]}": server_inner_results[3]}, step=(epoch*inner_epoch)+inner_epoch+1)
-
+                wandb.log({f"SERVER_INNER_RESULTS_{results_name[3]}": server_inner_results[3]})
                 for i in range(len(args.clients)):
-                    wandb.log({f"SERVER_INNER_CLIENTS_{i}_CLASS_{args.clients[i]}": server_inner_maps[args.clients[i]]}, step=(epoch*inner_epoch)+inner_epoch+1)
+                    wandb.log({f"SERVER_INNER_CLIENTS_{i}_CLASS_{args.clients[i]}": server_inner_maps[args.clients[i]]})
          
             print(" ========== finish to train server ========== ")           
         
@@ -282,6 +294,7 @@ def main(args):
             (num_clients, 7)
         )  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
         
+        node_grad = list()
         for proxy_single_client in range(len(args.clients)):
             print(
                 "train the client", proxy_single_client, "of communication round", epoch
@@ -307,6 +320,7 @@ def main(args):
             amp = check_amp(model)    
             scaler = torch.cuda.amp.GradScaler(enabled=amp)
             
+            single_node_grad = list()
             for inner_epoch in range(args.local_epoch):
                 model.train()
                 
@@ -320,14 +334,14 @@ def main(args):
                     imgs = imgs.to(device, non_blocking=True).float() / 255  # uint8 to float32, 0-255 to 0.0-1.0
 
                     # Warmup
-                    # if ni <= nw:
-                    #     xi = [0, nw]  # x interp
-                    #     accumulate = max(1, np.interp(ni, xi, [1, nbs / args.batch_size]).round())
-                    #     for j, x in enumerate(optimizer_server.param_groups):
-                    #         # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
-                    #         x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 0 else 0.0, x['initial_lr'] * lf(epoch)])
-                    #         if 'momentum' in x:
-                    #             x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])    
+                    if ni <= nw:
+                        xi = [0, nw]  # x interp
+                        accumulate = max(1, np.interp(ni, xi, [1, nbs / args.batch_size]).round())
+                        for j, x in enumerate(optimizer_server.param_groups):
+                            # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
+                            x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 0 else 0.0, x['initial_lr'] * lf(epoch)])
+                            if 'momentum' in x:
+                                x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])    
                     
                     # Multi-scale
                     sz = random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs  # size
@@ -339,10 +353,24 @@ def main(args):
                     # with torch.cuda.amp.autocast(amp):
                     pred = model(imgs)  # forward
                     loss, _ = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
-                    
+
+                    # grad = torch.autograd.grad(loss, model.parameters())
+                    # if inner_epoch == 0 and step == 0:
+                    #     grad_sum = deepcopy(grad)
+                    # grad_sum = [sum(i) for i in zip(grad, grad_sum)]
+    
                     # Backward
                     scaler.scale(loss).backward()
                     # loss.backward()
+                    
+                    grad = []
+                    for group in optimizer_server.param_groups:
+                        for p in group['params']:
+                            if p.grad is None:
+                                grad.append(torch.zeros_like(p).to(p.device))
+                                continue
+                            grad.append(p.grad.clone())
+                    single_node_grad.append(grad)        
                     # optimizer.step()
                     
                     # Optimize
@@ -354,25 +382,8 @@ def main(args):
                         optimizer.zero_grad()
                         last_opt_step = ni
 
-                    if (step) % 100 == 0:
-                        print(
-                            "client",
-                            proxy_single_client,
-                            step,
-                            "/",
-                            len(train_loader),
-                            "inner epoch",
-                            inner_epoch,
-                            "round",
-                            epoch,
-                            "/",
-                            args.epoch,
-                            "loss",
-                            loss.item(),
-                            "lr",
-                            optimizer.param_groups[0]["lr"],
-                        )
-                              
+                    wandb.log({f"NODE_{proxy_single_client}_LOSS": loss.item()})
+                        
                 # scheduler.step()
                 results[proxy_single_client], maps, _ = validate.run(
                     data_dict,
@@ -387,23 +398,49 @@ def main(args):
                 )
         
                 # log
-                wandb.log({f"CLIENTS_{proxy_single_client}_INNER_RESULTS_{results_name[3]}": results[proxy_single_client][3]}, step=(epoch*inner_epoch)+inner_epoch+1)
-
+                wandb.log({f"CLIENTS_{proxy_single_client}_INNER_RESULTS_{results_name[3]}": results[proxy_single_client][3]})
                 for i in range(len(args.clients)):
-                    wandb.log({f"CLIENTS_{proxy_single_client}_INNER_CLASS_{args.clients[i]}": maps[args.clients[i]]}, step=(epoch*inner_epoch)+inner_epoch+1)
+                    wandb.log({f"CLIENTS_{proxy_single_client}_INNER_CLASS_{args.clients[i]}": maps[args.clients[i]]})
+            # import pdb; pdb.set_trace()
+            # node_grad.append([i.cpu() for i in grad_sum])
+            
             # log
             wandb.log({f"CLIENTS_{proxy_single_client}_RESULTS_{results_name[3]}": results[proxy_single_client][3]}, step=epoch+1)
 
             for i in range(len(args.clients)):
                 wandb.log({f"CLIENTS_{proxy_single_client}_CLASS_{args.clients[i]}": maps[args.clients[i]]}, step=epoch+1)
-         
+
+            # grad
+            node_grad.append(single_node_grad)
+        # import pdb; pdb.set_trace()
+            
         """ ---- model average and eval ---- """
         if args.central:
-            average_model(args, model_avg, model_all, model_server, server_weight, clients_weights)
+            # average_model(args, model_avg, model_all, model_server, server_weight, clients_weights)
+            optimizer_avg.zero_grad()
+            node_grad.append(server_grad)
+            merged_grads = project_conflicting(node_grad)
+            idx = 0
+            for group in optimizer_avg.param_groups:
+                for p in group['params']:
+                    # if p.grad is None: continue
+                    p.grad = merged_grads[idx]
+                    idx += 1
+            optimizer_avg.step()
         else:
-            weight = None
-            average_model(args, model_avg, model_all, model_server, weight, clients_weights)
-
+            # weight = None
+            # average_model(args, model_avg, model_all, model_server, weight, clients_weights)
+            optimizer_avg.zero_grad()
+            # grads = node_grad.append(server_grad)
+            merged_grads = project_conflicting(node_grad)
+            idx = 0
+            for group in optimizer_avg.param_groups:
+                for p in group['params']:
+                    # if p.grad is None: continue
+                    p.grad = merged_grads[idx]
+                    idx += 1
+            optimizer_avg.step()
+            
         # then evaluate server
         model_avg.to(device)
         compute_loss = ComputeLoss(model_avg)
@@ -419,8 +456,8 @@ def main(args):
             compute_loss=compute_loss,
         )
         
-        for i in range(len(results_name)):
-            wandb.log({f"SERVER_RESULTS_{results_name[i]}": server_results[i]}, step=epoch+1)
+        # for i in range(len(results_name)):
+        wandb.log({f"SERVER_RESULTS_{results_name[3]}": server_results[3]}, step=epoch+1)
         for i in range(len(args.clients)):
             wandb.log({f"SERVER_CLIENTS_{i}_CLASS_{args.clients[i]}": server_maps[args.clients[i]]}, step=epoch+1)
 
@@ -501,7 +538,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--learning_rate",
-        default=1e-7,
+        default=1e-4,
         type=float,
         help="The initial learning rate for SGD.",
     )

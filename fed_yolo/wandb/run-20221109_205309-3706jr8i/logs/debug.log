@@ -23,3 +23,4 @@ config: {'learning_rate': 1e-07, 'epoch': 50, 'server_epoch': 1, 'local_epoch': 
 2022-11-09 20:53:12,547 INFO    MainThread:1931739 [wandb_run.py:_redirect():1903] Wrapping output streams.
 2022-11-09 20:53:12,547 INFO    MainThread:1931739 [wandb_run.py:_redirect():1925] Redirects installed.
 2022-11-09 20:53:12,548 INFO    MainThread:1931739 [wandb_init.py:init():765] run started, returning control to user process
+2022-11-10 15:24:58,813 WARNING MsgRouterThr:1931739 [router.py:message_loop():77] message_loop has been closed
