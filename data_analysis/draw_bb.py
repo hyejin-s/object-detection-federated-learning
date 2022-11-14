@@ -12,12 +12,12 @@ def xywh2xyxy(x):
     y[3] = x[1] + x[3] / 2  # bottom right y
     return y
 
-img = Image.open('/hdd/hdd3/coco_fl/images/node_1_class_56/000000002429.jpg').convert('RGB')
+img = Image.open('/hdd/hdd3/coco_fl/images/node_1_class_56/000000015906.jpg').convert('RGB')
 img.show()
 
 draw = ImageDraw.Draw(img)
 print(img.size)
-f = open('/hdd/hdd3/coco_fl/labels/node_1_class_56/000000002429.txt', 'r')
+f = open('/hdd/hdd3/coco_fl/labels/node_1_class_56/000000015906.txt', 'r')
 lines = f.readlines()
 print(lines)
 for line in lines:

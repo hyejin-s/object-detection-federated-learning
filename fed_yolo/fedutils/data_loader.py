@@ -16,7 +16,7 @@ from pathlib import Path
 import cv2
 import torch
 import torch.nn.functional as F
-from PIL import ExifTags, Image, ImageOps
+from PIL import ExifTags
 from torch.utils.data import DataLoader, Dataset, distributed
 from tqdm import tqdm
 
@@ -41,8 +41,6 @@ from fedmodels.yolov5.utils.dataloaders import (
     verify_image_label,
     InfiniteDataLoader,
     get_hash,
-    exif_size,
-    exif_transpose,
 )
 
 # Parameters
@@ -80,11 +78,9 @@ for orientation in ExifTags.TAGS.keys():
     if ExifTags.TAGS[orientation] == "Orientation":
         break
 
-
 def make_divisible(x, divisor):
     # Returns x evenly divisible by divisor
     return math.ceil(x / divisor) * divisor
-
 
 def img2label_paths(img_paths):
     # Define label paths as a function of image paths
@@ -93,7 +89,6 @@ def img2label_paths(img_paths):
         os.sep + "labels" + os.sep,
     )  # /images/, /labels/ substrings
     return [sb.join(x.rsplit(sa, 1)).rsplit(".", 1)[0] + ".txt" for x in img_paths]
-
 
 def create_dataloader(
     path,
@@ -161,7 +156,6 @@ def create_dataloader(
         ),
         dataset,
     )
-
 
 class LoadImagesAndLabels(Dataset):
     # YOLOv5 train_loader/val_loader, loads images and labels for training and validation
@@ -752,7 +746,6 @@ class LoadImagesAndLabels(Dataset):
 
         return torch.stack(im4, 0), torch.cat(label4, 0), path4, shapes4
 
-
 def partition_data(data_path, partition, n_nets):
     if os.path.isfile(data_path):
         with open(data_path) as f:
@@ -769,10 +762,8 @@ def partition_data(data_path, partition, n_nets):
         _label_path = copy.deepcopy(data_path)
         label_path = _label_path.replace("images", "labels")
         net_dataidx_map = non_iid_coco(label_path, n_nets)
-        # print(net_dataidx_map)
 
     return net_dataidx_map
-
 
 def non_iid_coco(label_path, client_num):
     res_bin = {}
@@ -816,30 +807,19 @@ def non_iid_coco(label_path, client_num):
     res_bin[b + 1] = np.array(list(fs_id))
     return res_bin
 
+def load_partition_data_custom(args, hyp, model, data_dict, batch_size, img_size, clients, shuffle):
 
-def load_partition_data_custom(args, hyp, model, class_list=None):
-    batch_size = args.batch_size
+    train_path = os.path.expanduser(data_dict["path"] + data_dict["train"])
+    test_path = os.path.expanduser("/hdd/hdd3/coco/images/val2017")
 
-    with open(args.data_conf) as f:
-        data_dict = yaml.load(f, Loader=yaml.FullLoader)  # data dict
-
-    train_path = data_dict["path"] + data_dict["train"]
-    test_path = "/hdd/hdd3/coco/images/val2017"
-    train_path = os.path.expanduser(train_path)
-    test_path = os.path.expanduser(test_path)
-
-    nc, names = (int(data_dict["nc"]), data_dict["names"])  # number classes, names
     gs = int(max(model.stride))  # grid size (max stride)
-    imgsz = check_img_size(args.img_size, gs, floor=gs * 2)
+    imgsz = check_img_size(img_size, gs, floor=gs * 2)
 
-    client_number = args.client_num_in_total
-
-    train_data_loader_dict = dict()
-    test_data_loader_dict = dict()
-    train_data_num_dict = dict()
     train_dataset_dict = dict()
+    train_data_num_dict = dict()
+    train_data_loader_dict = dict()
 
-    testloader = create_dataloader(
+    test_loader = create_dataloader(
         test_path,
         imgsz,
         batch_size,
@@ -848,14 +828,12 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
         rect=True,
         rank=-1,
         pad=0.5,
-        workers=args.num_workers,
-        shuffle=True
+        shuffle=shuffle
     )[0]
 
     if args.dataset == "per_class":
-        for client_idx in range(args.client_num_in_total):
-            # client_idx = int(args.process_id) - 1
-            train_path = data_dict["path"] + f"/node_{client_idx+1}_class_{class_list[client_idx]}"
+        for client_idx in range(len(clients)):
+            train_path = data_dict["path"] + f"/node_{client_idx+1}_class_{clients[client_idx]}"
             dataloader, dataset = create_dataloader(
                 train_path,
                 imgsz,
@@ -864,24 +842,21 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
                 args,
                 hyp=hyp,
                 rect=True,
-                workers=args.num_workers,
-                shuffle=True
+                shuffle=shuffle
             )
 
             train_dataset_dict[client_idx] = dataset
             train_data_num_dict[client_idx] = len(dataset)
             train_data_loader_dict[client_idx] = dataloader
-            test_data_loader_dict[client_idx] = testloader
 
+    # for homogeneous
     elif args.dataset == "all":
-
-        client_number = args.client_num_in_total
         partition = "homo"
 
         net_dataidx_map = partition_data(
-            train_path, partition=partition, n_nets=client_number
+            train_path, partition=partition, n_nets=len(clients)
         )
-        for client_idx in range(args.client_num_in_total):
+        for client_idx in range(len(clients)):
             dataloader, dataset = create_dataloader(
                 train_path,
                 imgsz,
@@ -891,40 +866,28 @@ def load_partition_data_custom(args, hyp, model, class_list=None):
                 rect=True,
                 augment=True,
                 net_dataidx_map=net_dataidx_map[client_idx],
-                workers=args.num_workers,
             )
 
             train_dataset_dict[client_idx] = dataset
             train_data_num_dict[client_idx] = len(dataset)
             train_data_loader_dict[client_idx] = dataloader
-            test_data_loader_dict[client_idx] = testloader
 
     return (
         train_dataset_dict,
         train_data_num_dict,
         train_data_loader_dict,
-        test_data_loader_dict,
-        testloader,
-        nc,
+        test_loader,
     )
 
+def load_server_data(args, hyp, model, data_dict, batch_size, img_size, shuffle):
 
-def load_server_data(args, hyp, model):
-    batch_size = args.batch_size
+    train_path = os.path.expanduser(os.path.join(data_dict["path"], "server"))
+    test_path = os.path.expanduser("/hdd/hdd3/coco/images/val2017")
 
-    with open(args.data_conf) as f:
-        data_dict = yaml.load(f, Loader=yaml.FullLoader)  # data dict
-
-    train_path = "/hdd/hdd3/coco_no_chair_table/images/"
-    test_path = "/hdd/hdd3/coco/images/val2017"
-    train_path = os.path.expanduser(train_path)
-    test_path = os.path.expanduser(test_path)
-
-    nc, names = (int(data_dict["nc"]), data_dict["names"])  # number classes, names
     gs = int(max(model.stride))  # grid size (max stride)
-    imgsz = check_img_size(args.img_size, gs, floor=gs * 2)
+    imgsz = check_img_size(img_size, gs, floor=gs * 2)
 
-    trainloader, train_dataset = create_dataloader(
+    train_loader, train_dataset = create_dataloader(
         train_path,
         imgsz,
         batch_size,
@@ -932,11 +895,10 @@ def load_server_data(args, hyp, model):
         args,
         hyp=hyp,
         rect=True,
-        workers=args.num_workers,
-        shuffle=True
+        shuffle=shuffle
     )
 
-    testloader = create_dataloader(
+    test_loader = create_dataloader(
         test_path,
         imgsz,
         batch_size,
@@ -945,13 +907,11 @@ def load_server_data(args, hyp, model):
         rect=True,
         rank=-1,
         pad=0.5,
-        workers=args.num_workers,
-        shuffle=True
+        shuffle=shuffle
     )[0]
 
     return (
-        trainloader,
+        train_loader,
         train_dataset,
-        testloader,
-        nc,
+        test_loader,
     )
