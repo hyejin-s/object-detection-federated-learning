@@ -329,7 +329,7 @@ def plot_images(images, targets, paths=None, fname="images.jpg", names=None):
     max_subplots = 16  # max image subplots, i.e. 4x4
     bs, _, h, w = images.shape  # batch size, _, height, width
     bs = min(bs, max_subplots)  # limit plot images
-    ns = np.ceil(bs**0.5)  # number of subplots (square)
+    ns = np.ceil(bs ** 0.5)  # number of subplots (square)
     if np.max(images[0]) <= 1:
         images *= 255  # de-normalise (optional)
 
@@ -563,7 +563,7 @@ def imshow_cls(
         denormalize(im.clone()).cpu().float(), len(im), dim=0
     )  # select batch index 0, block by channels
     n = min(len(blocks), nmax)  # number of plots
-    m = min(8, round(n**0.5))  # 8 x 8 default
+    m = min(8, round(n ** 0.5))  # 8 x 8 default
     fig, ax = plt.subplots(math.ceil(n / m), m)  # 8 rows x n/8 cols
     ax = ax.ravel() if m > 1 else [ax]
     # plt.subplots_adjust(wspace=0.05, hspace=0.05)

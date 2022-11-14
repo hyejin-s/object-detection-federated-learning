@@ -15,14 +15,7 @@ def fitness(x):
 
 
 def ap_per_class_box_and_mask(
-    tp_m,
-    tp_b,
-    conf,
-    pred_cls,
-    target_cls,
-    plot=False,
-    save_dir=".",
-    names=(),
+    tp_m, tp_b, conf, pred_cls, target_cls, plot=False, save_dir=".", names=(),
 ):
     """
     Args:

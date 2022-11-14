@@ -121,8 +121,7 @@ class CometLogger:
                     -3:
                 ]
                 self.experiment.log_other(
-                    "Run Path",
-                    f"{workspace}/{project_name}/{experiment_id}",
+                    "Run Path", f"{workspace}/{project_name}/{experiment_id}",
                 )
             self.log_parameters(vars(opt))
             self.log_parameters(self.opt.hyp)
@@ -132,8 +131,7 @@ class CometLogger:
                 metadata={"type": "hyp-config-file"},
             )
             self.log_asset(
-                f"{self.opt.save_dir}/opt.yaml",
-                metadata={"type": "opt-config-file"},
+                f"{self.opt.save_dir}/opt.yaml", metadata={"type": "opt-config-file"},
             )
 
         self.comet_log_confusion_matrix = COMET_LOG_CONFUSION_MATRIX
@@ -191,13 +189,10 @@ class CometLogger:
         if mode == "offline":
             if experiment_id is not None:
                 return comet_ml.ExistingOfflineExperiment(
-                    previous_experiment=experiment_id,
-                    **self.default_experiment_kwargs,
+                    previous_experiment=experiment_id, **self.default_experiment_kwargs,
                 )
 
-            return comet_ml.OfflineExperiment(
-                **self.default_experiment_kwargs,
-            )
+            return comet_ml.OfflineExperiment(**self.default_experiment_kwargs,)
 
         else:
             try:

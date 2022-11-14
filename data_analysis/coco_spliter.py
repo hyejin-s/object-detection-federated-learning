@@ -69,13 +69,13 @@ class CocoSpliter:
                 label_path = os.path.join(save_dir, f"labels/server/")
                 self.create_dir(label_path)
                 shutil.copy(f"{self.dir}/{file}", label_path)
-                
+
                 img_path = os.path.join(save_dir, f"images/server/")
                 self.create_dir(img_path)
                 img_name = file.split(".")[0] + ".jpg"
                 shutil.copy(f"{data_dir}images/train2017/{img_name}", img_path)
-                
-            else: # for node
+
+            else:  # for node
                 if obj == collect_class_list[0]:
                     node = 1
                 else:
@@ -104,10 +104,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--save_dir",
-        help="save root",
-        type=str,
-        default="/hdd/hdd3/coco_fl/",
+        "--save_dir", help="save root", type=str, default="/hdd/hdd3/coco_fl/",
     )
     parser.add_argument("--data_dir", type=str, default="/hdd/hdd3/coco/")
     parser.add_argument(

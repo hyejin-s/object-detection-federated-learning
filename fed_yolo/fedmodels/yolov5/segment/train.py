@@ -421,12 +421,9 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                 pbar, total=nb, bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}"
             )  # progress bar
         optimizer.zero_grad()
-        for i, (
-            imgs,
-            targets,
-            paths,
-            _,
-            masks,
+        for (
+            i,
+            (imgs, targets, paths, _, masks,),
         ) in pbar:  # batch ------------------------------------------------------
             # callbacks.run('on_train_batch_start')
             ni = i + nb * epoch  # number integrated batches (since train start)

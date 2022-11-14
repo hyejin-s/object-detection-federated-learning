@@ -52,6 +52,7 @@ class DatasetDist:
 
         return class_dic
 
+
 def main(args):
 
     if args.dist:
@@ -72,24 +73,25 @@ def main(args):
 
     plt.figure(figsize=(15, 10))
     plt.bar(*zip(*class_dic.items()))
-    plt.xlabel('Class', fontsize=20)
-    plt.ylabel('The number of class', fontsize=20)
-    plt.title('COCO train dataset class distribution', fontsize=25)
-    plt.savefig(args.name+'.png')
-        
+    plt.xlabel("Class", fontsize=20)
+    plt.ylabel("The number of class", fontsize=20)
+    plt.title("COCO train dataset class distribution", fontsize=25)
+    plt.savefig(args.name + ".png")
+
     if args.ratio:
-        total_num = sum(class_dic.values())-class_dic[0]
+        total_num = sum(class_dic.values()) - class_dic[0]
         ratio_class_dic = {}
         for key in class_dic.keys():
-            ratio_class_dic[key] = class_dic[key]/total_num
+            ratio_class_dic[key] = class_dic[key] / total_num
         print(ratio_class_dic)
-            
+
         # plt.figure(figsize=(15, 10))
         # plt.bar(*zip(*ratio_class_dic.items()))
         # plt.xlabel('Class', fontsize=20)
         # plt.ylabel('The number of class', fontsize=20)
         # plt.title('COCO train dataset class distribution (ratio)', fontsize=25)
         # plt.savefig(args.name+'_ratio.png')
+
 
 if __name__ == "__main__":
 
@@ -105,9 +107,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dist", help="if pickle file is already saved and only prints", default=False
     )
-    parser.add_argument(
-        "--ratio", help="ratio; data distribution", default=False
-    )
+    parser.add_argument("--ratio", help="ratio; data distribution", default=False)
 
     args = parser.parse_args()
     main(args)

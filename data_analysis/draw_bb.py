@@ -1,5 +1,5 @@
 from PIL import Image, ImageDraw
-import torch 
+import torch
 import numpy as np
 
 
@@ -12,32 +12,39 @@ def xywh2xyxy(x):
     y[3] = x[1] + x[3] / 2  # bottom right y
     return y
 
-img = Image.open('/hdd/hdd3/coco_fl/images/node_1_class_56/000000015906.jpg').convert('RGB')
+
+img = Image.open("/hdd/hdd3/coco_fl/images/node_1_class_56/000000015906.jpg").convert(
+    "RGB"
+)
 img.show()
 
 draw = ImageDraw.Draw(img)
 print(img.size)
-f = open('/hdd/hdd3/coco_fl/labels/node_1_class_56/000000015906.txt', 'r')
+f = open("/hdd/hdd3/coco_fl/labels/node_1_class_56/000000015906.txt", "r")
 lines = f.readlines()
 print(lines)
 for line in lines:
     line = line.strip()
-    line = line.split(' ')[1:]
+    line = line.split(" ")[1:]
     # print(line[0])
     line_f = list()
     for idx, i in enumerate(line):
         if idx % 2 == 0:
-            line_f.append(float(i)*img.size[0])
+            line_f.append(float(i) * img.size[0])
         else:
-            line_f.append(float(i)*img.size[1])
+            line_f.append(float(i) * img.size[1])
     print(line_f)
     line_xy = xywh2xyxy(line_f)
     # draw.rectangle([(float(line[0])*640,float(line[1])*640),(float(line[2])*640,float(line[3])*640)], outline=(0,255,0), width = 3)
-    draw.rectangle([(line_xy[0], line_xy[1]),(line_xy[2], line_xy[3])], outline=(0,255,0), width = 3)
+    draw.rectangle(
+        [(line_xy[0], line_xy[1]), (line_xy[2], line_xy[3])],
+        outline=(0, 255, 0),
+        width=3,
+    )
 f.close()
 
 
 # draw = ImageDraw.Draw(img)
 # draw.rectangle((100,100,300,300), outline=(0,255,0), width = 3)
 
-img.save('test.jpg', 'JPEG')
+img.save("test.jpg", "JPEG")

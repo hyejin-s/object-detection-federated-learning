@@ -290,17 +290,31 @@ def partial_client_selection(args, model, hyp):
 
         # Optimizer
         nbs = 64  # nominal batch size
-        accumulate = max(round(nbs / args.batch_size), 1)  # accumulate loss before optimizing
-        hyp['weight_decay'] *= args.batch_size * accumulate / nbs 
-        optimizer_all[proxy_single_client] = smart_optimizer(model_all[proxy_single_client], 'SGD', args.learning_rate, hyp['momentum'], hyp['weight_decay'])
+        accumulate = max(
+            round(nbs / args.batch_size), 1
+        )  # accumulate loss before optimizing
+        hyp["weight_decay"] *= args.batch_size * accumulate / nbs
+        optimizer_all[proxy_single_client] = smart_optimizer(
+            model_all[proxy_single_client],
+            "SGD",
+            args.learning_rate,
+            hyp["momentum"],
+            hyp["weight_decay"],
+        )
 
-        lf = lambda x: (1 - x / args.local_epoch) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
-        scheduler_all[proxy_single_client] = lr_scheduler.LambdaLR(optimizer_all[proxy_single_client], lr_lambda=lf)
+        lf = (
+            lambda x: (1 - x / args.local_epoch) * (1.0 - hyp["lrf"]) + hyp["lrf"]
+        )  # linear
+        scheduler_all[proxy_single_client] = lr_scheduler.LambdaLR(
+            optimizer_all[proxy_single_client], lr_lambda=lf
+        )
 
     return model_all, optimizer_all, scheduler_all, ema_all
 
 
-def average_model(args, model_avg, model_all, model_server, server_weight, clients_weights):
+def average_model(
+    args, model_avg, model_all, model_server, server_weight, clients_weights
+):
     print("---- calculate the model avg ----")
     params = dict(model_avg.named_parameters())
 

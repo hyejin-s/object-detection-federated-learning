@@ -69,8 +69,9 @@ class Albumentations:
             new = self.transform(
                 image=im, bboxes=labels[:, 1:], class_labels=labels[:, 0]
             )  # transformed
-            im, labels = new["image"], np.array(
-                [[c, *b] for c, b in zip(new["class_labels"], new["bboxes"])]
+            im, labels = (
+                new["image"],
+                np.array([[c, *b] for c, b in zip(new["class_labels"], new["bboxes"])]),
             )
         return im, labels
 
@@ -127,8 +128,9 @@ def replicate(im, labels):
     for i in s.argsort()[: round(s.size * 0.5)]:  # smallest indices
         x1b, y1b, x2b, y2b = boxes[i]
         bh, bw = y2b - y1b, x2b - x1b
-        yc, xc = int(random.uniform(0, h - bh)), int(
-            random.uniform(0, w - bw)
+        yc, xc = (
+            int(random.uniform(0, h - bh)),
+            int(random.uniform(0, w - bw)),
         )  # offset x, y
         x1a, y1a, x2a, y2a = [xc, yc, xc + bw, yc + bh]
         im[y1a:y2a, x1a:x2a] = im[y1b:y2b, x1b:x2b]  # im4[ymin:ymax, xmin:xmax]
@@ -463,8 +465,11 @@ class LetterBox:
         r = min(self.h / imh, self.w / imw)  # ratio of new/old
         h, w = round(imh * r), round(imw * r)  # resized image
         hs, ws = (
-            math.ceil(x / self.stride) * self.stride for x in (h, w)
-        ) if self.auto else self.h, self.w
+            (math.ceil(x / self.stride) * self.stride for x in (h, w))
+            if self.auto
+            else self.h,
+            self.w,
+        )
         top, left = round((hs - h) / 2 - 0.1), round((ws - w) / 2 - 0.1)
         im_out = np.full((self.h, self.w, 3), 114, dtype=im.dtype)
         im_out[top : top + h, left : left + w] = cv2.resize(

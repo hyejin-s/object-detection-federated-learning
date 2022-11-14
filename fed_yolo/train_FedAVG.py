@@ -27,7 +27,9 @@ from fedutils.start_config import init_configure
 from fedutils.scheduler import setup_scheduler
 
 import wandb
+
 wandb.login()
+
 
 def project_conflicting(grads):
     pc_grad = deepcopy(grads)
@@ -37,22 +39,24 @@ def project_conflicting(grads):
         for g_j in pc_grad:
             g_i_g_j = torch.dot(g_i, g_j)
             if g_i_g_j < 0:
-                g_i -= (g_i_g_j) * g_j / (g_j.norm()**2)
+                g_i -= (g_i_g_j) * g_j / (g_j.norm() ** 2)
     merged_grad = torch.zeros_like(grads[0]).to(grads[0].device)
 
     return merged_grad
+
 
 def unflatten_grad(grads, shapes):
     unflatten_grad, idx = [], 0
     for shape in shapes:
         length = np.prod(shape)
-        unflatten_grad.append(grads[idx:idx + length].view(shape).clone())
+        unflatten_grad.append(grads[idx : idx + length].view(shape).clone())
         idx += length
 
     return unflatten_grad
 
+
 def main(args):
-    
+
     # server participation
     if args.central:
         print(" ========== train with server (central dataset) ========== ")
@@ -86,17 +90,17 @@ def main(args):
             + "_seed_"
             + str(args.seed)
         )
-    
+
     # gradient surgery
     if args.grad_surgery:
         print(" ========== gradient surgery ========== ")
-    
+
     num = 0
     exp_dir = os.path.join(args.save_dir, f"{name}_{num}")
     while os.path.exists(exp_dir):
         num += 1
         exp_dir = os.path.join(args.save_dir, f"{name}_{num}")
-    
+
     if not os.path.exists(exp_dir):
         os.makedirs(exp_dir)
 
@@ -109,41 +113,52 @@ def main(args):
                 "epoch": args.epoch,
                 "server_epoch": args.server_local_epoch,
                 "local_epoch": args.local_epoch,
-                "batch_size": args.batch_size
-            })
-        
-    # initialization    
+                "batch_size": args.batch_size,
+            },
+        )
+
+    # initialization
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model, hyp = init_configure(args, device, exp_dir) # default: hyp.scratch-low
+    model, hyp = init_configure(args, device, exp_dir)  # default: hyp.scratch-low
 
     # training, validating, and testing
-    ''' prepare dataset '''
-    with open(args.data_conf) as f: # default: coco_fl
+    """ prepare dataset """
+    with open(args.data_conf) as f:  # default: coco_fl
         data_dict = yaml.load(f, Loader=yaml.FullLoader)  # data dict
 
     shuffle = args.shuffle
     batch_size, img_size = args.batch_size, args.img_size
     clients, num_clients = args.clients, len(args.clients)
-    dataset = load_partition_data_custom(args, hyp, model, data_dict, batch_size, img_size, clients, shuffle)
+    dataset = load_partition_data_custom(
+        args, hyp, model, data_dict, batch_size, img_size, clients, shuffle
+    )
     [
         train_dataset_dict,
         train_data_num_dict,
         train_data_loader_dict,
-        test_loader
+        test_loader,
     ] = dataset
 
-    server_loader, server_dataset, _ = load_server_data(args, hyp, model, data_dict, batch_size, img_size, shuffle)
+    server_loader, server_dataset, _ = load_server_data(
+        args, hyp, model, data_dict, batch_size, img_size, shuffle
+    )
 
     # all the clients joined in the train
-    clients_keys = list(train_dataset_dict.keys()) 
-    clients_data_num = {
-        name: train_data_num_dict[name] for name in clients_keys
-    }
+    clients_keys = list(train_dataset_dict.keys())
+    clients_data_num = {name: train_data_num_dict[name] for name in clients_keys}
 
     model.to(device)
     compute_loss = ComputeLoss(model)
 
-    results_name = ["P", "R", "mAP@.5", "mAP@.5-.95", "val_loss(box)", "val_loss(obj)", "val_loss(cls)"]
+    results_name = [
+        "P",
+        "R",
+        "mAP@.5",
+        "mAP@.5-.95",
+        "val_loss(box)",
+        "val_loss(obj)",
+        "val_loss(cls)",
+    ]
     # checking initial model performace
     server_results, server_maps, _ = validate.run(
         data_dict,
@@ -157,40 +172,69 @@ def main(args):
         verbose=False,
         compute_loss=compute_loss,
     )
-    
+
     # log
     # for i in range(len(results_name)):
     wandb.log({f"SERVER_RESULTS_{results_name[3]}": server_results[3]}, step=0)
     for i in range(len(args.clients)):
-        wandb.log({f"SERVER_CLIENTS_{i}_CLASS_{args.clients[i]}": server_maps[args.clients[i]]}, step=0)
-            
+        wandb.log(
+            {
+                f"SERVER_CLIENTS_{i}_CLASS_{args.clients[i]}": server_maps[
+                    args.clients[i]
+                ]
+            },
+            step=0,
+        )
+
     # Configuration for FedAVG, prepare model, optimizer, and scheduler
-    model_all, optimizer_all, scheduler_all, ema_all = partial_client_selection(args, model, hyp)
-    model_server = deepcopy(model).cpu() # server for update
-    
+    model_all, optimizer_all, scheduler_all, ema_all = partial_client_selection(
+        args, model, hyp
+    )
+    model_server = deepcopy(model).cpu()  # server for update
+
     # Image size
     gs = max(int(model_server.stride.max()), 32)  # grid size (max stride)
-    imgsz = check_img_size(args.img_size, gs, floor=gs * 2)  # verify imgsz is gs-multiple
-    
+    imgsz = check_img_size(
+        args.img_size, gs, floor=gs * 2
+    )  # verify imgsz is gs-multiple
+
     # Optimizer
     nbs = 64  # nominal batch size
-    accumulate = max(round(nbs / args.batch_size), 1)  # accumulate loss before optimizing
-    hyp['weight_decay'] *= args.batch_size * accumulate / nbs 
-    optimizer_server = smart_optimizer(model_server, args.optimizer_type, args.learning_rate, hyp['momentum'], hyp['weight_decay'])
+    accumulate = max(
+        round(nbs / args.batch_size), 1
+    )  # accumulate loss before optimizing
+    hyp["weight_decay"] *= args.batch_size * accumulate / nbs
+    optimizer_server = smart_optimizer(
+        model_server,
+        args.optimizer_type,
+        args.learning_rate,
+        hyp["momentum"],
+        hyp["weight_decay"],
+    )
 
-    lf_server = lambda x: (1 - x / args.server_local_epoch) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
-    scheduler_server = lr_scheduler.LambdaLR(optimizer_server, lr_lambda=lf_server)  # plot_lr_scheduler(optimizer, scheduler, epochs)
+    lf_server = (
+        lambda x: (1 - x / args.server_local_epoch) * (1.0 - hyp["lrf"]) + hyp["lrf"]
+    )  # linear
+    scheduler_server = lr_scheduler.LambdaLR(
+        optimizer_server, lr_lambda=lf_server
+    )  # plot_lr_scheduler(optimizer, scheduler, epochs)
 
-    amp_server = check_amp(model_server)    
+    amp_server = check_amp(model_server)
     scaler_server = torch.cuda.amp.GradScaler(enabled=amp_server)
-    
-    model_avg = deepcopy(model).cpu() # average server
-    optimizer_avg = smart_optimizer(model_avg, args.optimizer_type, args.learning_rate, hyp['momentum'], hyp['weight_decay'])
-    
+
+    model_avg = deepcopy(model).cpu()  # average server
+    optimizer_avg = smart_optimizer(
+        model_avg,
+        args.optimizer_type,
+        args.learning_rate,
+        hyp["momentum"],
+        hyp["weight_decay"],
+    )
+
     # model shape
     model_shape = list()
     for group in optimizer_avg.param_groups:
-        for p in group['params']:
+        for p in group["params"]:
             model_shape.append(p.shape)
     print("=============== start training ===============")
     for epoch in range(args.epoch):
@@ -202,7 +246,7 @@ def main(args):
         curr_total_client_lens = 0
         for client in clients_keys:
             curr_total_client_lens += clients_data_num[client]
-            
+
         # if server participate the training
         if args.central:
             curr_total_client_lens += len(server_dataset)
@@ -211,76 +255,101 @@ def main(args):
             # the ratio of clients for updating the clients weights
             server_weight = len(server_dataset) / curr_total_client_lens
 
-            print(
-                "train the server", "of communication round", epoch
-            )
+            print("train the server", "of communication round", epoch)
             nb = len(server_loader)  # number of batches
-            nw = max(round(5 * nb), 100) # hyp['warmup_epochs'] = 5
+            nw = max(round(5 * nb), 100)  # hyp['warmup_epochs'] = 5
             last_opt_step = -1
-            
+
             model_server = model_server.to(device)
             compute_loss = ComputeLoss(model_server)
-            
+
             server_grad = list()
             for inner_epoch in range(args.server_local_epoch):
                 model_server.train()
 
                 pbar = enumerate(server_loader)
-                pbar = tqdm(pbar, total=nb, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
+                pbar = tqdm(
+                    pbar, total=nb, bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}"
+                )  # progress bar
                 optimizer_server.zero_grad()
-                for step, (imgs, targets, paths, _) in pbar:   
-                    ni = step + nb * epoch  # number integrated batches (since train start)
-                    imgs = imgs.to(device, non_blocking=True).float() / 255  # uint8 to float32, 0-255 to 0.0-1.0
-                    
+                for step, (imgs, targets, paths, _) in pbar:
+                    ni = (
+                        step + nb * epoch
+                    )  # number integrated batches (since train start)
+                    imgs = (
+                        imgs.to(device, non_blocking=True).float() / 255
+                    )  # uint8 to float32, 0-255 to 0.0-1.0
+
                     # Warmup
                     if ni <= nw:
                         xi = [0, nw]  # x interp
-                        accumulate = max(1, np.interp(ni, xi, [1, nbs / args.batch_size]).round())
+                        accumulate = max(
+                            1, np.interp(ni, xi, [1, nbs / args.batch_size]).round()
+                        )
                         for j, x in enumerate(optimizer_server.param_groups):
                             # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
-                            x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 0 else 0.0, x['initial_lr'] * lf_server(epoch)])
-                            if 'momentum' in x:
-                                x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])    
-                    
+                            x["lr"] = np.interp(
+                                ni,
+                                xi,
+                                [
+                                    hyp["warmup_bias_lr"] if j == 0 else 0.0,
+                                    x["initial_lr"] * lf_server(epoch),
+                                ],
+                            )
+                            if "momentum" in x:
+                                x["momentum"] = np.interp(
+                                    ni, xi, [hyp["warmup_momentum"], hyp["momentum"]]
+                                )
+
                     # Multi-scale
-                    sz = random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs  # size
+                    sz = (
+                        random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs
+                    )  # size
                     sf = sz / max(imgs.shape[2:])  # scale factor
                     if sf != 1:
-                        ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
-                        imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
-                                        
+                        ns = [
+                            math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]
+                        ]  # new shape (stretched to gs-multiple)
+                        imgs = nn.functional.interpolate(
+                            imgs, size=ns, mode="bilinear", align_corners=False
+                        )
+
                     with torch.cuda.amp.autocast(amp_server):
                         pred = model_server(imgs)  # forward
-                        loss, _ = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
+                        loss, _ = compute_loss(
+                            pred, targets.to(device)
+                        )  # loss scaled by batch_size
                     # grad = torch.autograd.grad(loss, model_server.parameters())
                     # import pdb; pdb.set_trace()
                     # if inner_epoch == 0 and step == 0:
                     #     server_grad = deepcopy(grad)
                     # server_grad = tuple(sum(i) for i in zip(grad, server_grad))
-                    
+
                     # Backward
                     scaler_server.scale(loss).backward()
                     # loss.backward()
                     if args.grad_surgery:
                         grad = []
                         for group in optimizer_server.param_groups:
-                            for p in group['params']:
+                            for p in group["params"]:
                                 if p.grad is None:
                                     grad.append(torch.zeros_like(p).cpu())
                                     continue
                                 grad.append(p.grad.clone().cpu())
-                        server_grad.append(grad)        
-                    # optimizer_server.step()                    
-                    
+                        server_grad.append(grad)
+                    # optimizer_server.step()
+
                     # Optimize
                     if ni - last_opt_step >= accumulate:
                         scaler.unscale_(optimizer_server)  # unscale gradients
-                        torch.nn.utils.clip_grad_norm_(model_server.parameters(), max_norm=10.0)  # clip gradients
+                        torch.nn.utils.clip_grad_norm_(
+                            model_server.parameters(), max_norm=10.0
+                        )  # clip gradients
                         scaler.step(optimizer_server)  # optimizer.step
                         scaler.update()
                         optimizer_server.zero_grad()
                         last_opt_step = ni
-                    
+
                     wandb.log({"SERVER_LOSS": loss.item()})
 
                 scheduler_server.step()
@@ -298,20 +367,30 @@ def main(args):
                 )
 
                 # log
-                wandb.log({f"SERVER_INNER_RESULTS_{results_name[3]}": server_inner_results[3]})
+                wandb.log(
+                    {f"SERVER_INNER_RESULTS_{results_name[3]}": server_inner_results[3]}
+                )
                 for i in range(len(args.clients)):
-                    wandb.log({f"SERVER_INNER_CLIENTS_{i}_CLASS_{args.clients[i]}": server_inner_maps[args.clients[i]]})
-         
-            print(" ========== finish to train server ========== ")           
-        
-        clients_weights = {}                            
-        lf = lambda x: (1 - x / args.local_epoch) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
+                    wandb.log(
+                        {
+                            f"SERVER_INNER_CLIENTS_{i}_CLASS_{args.clients[i]}": server_inner_maps[
+                                args.clients[i]
+                            ]
+                        }
+                    )
+
+            print(" ========== finish to train server ========== ")
+
+        clients_weights = {}
+        lf = (
+            lambda x: (1 - x / args.local_epoch) * (1.0 - hyp["lrf"]) + hyp["lrf"]
+        )  # linear
         # local update
-        
+
         results = np.zeros(
             (num_clients, 7)
         )  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
-        
+
         node_grad = list()
         for proxy_single_client in range(len(args.clients)):
             print(
@@ -323,94 +402,131 @@ def main(args):
                 clients_data_num[proxy_single_client] / curr_total_client_lens
             )
 
-            # client's train dataset 
+            # client's train dataset
             train_loader = train_data_loader_dict[proxy_single_client]
-            
+
             model = model_all[proxy_single_client].to(device)
-            import pdb; pdb.set_trace()
+            import pdb
+
+            pdb.set_trace()
             optimizer = optimizer_all[proxy_single_client]
             scheduler = scheduler_all[proxy_single_client]
             ema = ema_all[proxy_single_client]
             compute_loss = ComputeLoss(model)
-                        
+
             nb = len(train_loader)  # number of batches
-            nw = max(round(5 * nb), 100) # hyp['warmup_epochs'] = 5
+            nw = max(round(5 * nb), 100)  # hyp['warmup_epochs'] = 5
             scheduler.last_epoch = -1
             last_opt_step = -1
 
-            amp = check_amp(model)    
+            amp = check_amp(model)
             scaler = torch.cuda.amp.GradScaler(enabled=amp)
-            
+
             single_node_grad = list()
             for inner_epoch in range(args.local_epoch):
                 model.train()
-                
+
                 pbar = enumerate(train_loader)
-                pbar = tqdm(pbar, total=nb, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
-                
+                pbar = tqdm(
+                    pbar, total=nb, bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}"
+                )  # progress bar
+
                 optimizer.zero_grad()
-                
-                for step, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
-                    ni = step + nb * epoch  # number integrated batches (since train start)
-                    imgs = imgs.to(device, non_blocking=True).float() / 255  # uint8 to float32, 0-255 to 0.0-1.0
+
+                for (
+                    step,
+                    (imgs, targets, paths, _,),
+                ) in (
+                    pbar
+                ):  # batch -------------------------------------------------------------
+                    ni = (
+                        step + nb * epoch
+                    )  # number integrated batches (since train start)
+                    imgs = (
+                        imgs.to(device, non_blocking=True).float() / 255
+                    )  # uint8 to float32, 0-255 to 0.0-1.0
 
                     # Warmup
                     if ni <= nw:
                         xi = [0, nw]  # x interp
-                        accumulate = max(1, np.interp(ni, xi, [1, nbs / args.batch_size]).round())
+                        accumulate = max(
+                            1, np.interp(ni, xi, [1, nbs / args.batch_size]).round()
+                        )
                         for j, x in enumerate(optimizer.param_groups):
                             # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
-                            x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 0 else 0.0, x['initial_lr'] * lf(epoch)])
-                            if 'momentum' in x:
-                                x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])    
-                    
+                            x["lr"] = np.interp(
+                                ni,
+                                xi,
+                                [
+                                    hyp["warmup_bias_lr"] if j == 0 else 0.0,
+                                    x["initial_lr"] * lf(epoch),
+                                ],
+                            )
+                            if "momentum" in x:
+                                x["momentum"] = np.interp(
+                                    ni, xi, [hyp["warmup_momentum"], hyp["momentum"]]
+                                )
+
                     # Multi-scale
-                    sz = random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs  # size
+                    sz = (
+                        random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs
+                    )  # size
                     sf = sz / max(imgs.shape[2:])  # scale factor
                     if sf != 1:
-                        ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
-                        imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
-                                        
+                        ns = [
+                            math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]
+                        ]  # new shape (stretched to gs-multiple)
+                        imgs = nn.functional.interpolate(
+                            imgs, size=ns, mode="bilinear", align_corners=False
+                        )
+
                     with torch.cuda.amp.autocast(amp):
                         pred = model(imgs)  # forward
-                        loss, _ = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
+                        loss, _ = compute_loss(
+                            pred, targets.to(device)
+                        )  # loss scaled by batch_size
 
                     # grad = torch.autograd.grad(loss, model.parameters())
                     # if inner_epoch == 0 and step == 0:
                     #     grad_sum = deepcopy(grad)
                     # grad_sum = [sum(i) for i in zip(grad, grad_sum)]
-    
+
                     # Backward
                     scaler.scale(loss).backward()
                     # loss.backward()
-                    
+
                     if args.grad_surgery:
                         grad = []
                         for group in optimizer.param_groups:
-                            for p in group['params']:
+                            for p in group["params"]:
                                 if p.grad is None:
                                     grad.append(torch.zeros_like(p))
                                     continue
                                 grad.append(p.grad.clone().cpu())
-                        single_node_grad.append(grad)        
+                        single_node_grad.append(grad)
                     # optimizer.step()
-                    
+
                     # Optimize
                     if ni - last_opt_step >= accumulate:
                         scaler.unscale_(optimizer)  # unscale gradients
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)  # clip gradients
+                        torch.nn.utils.clip_grad_norm_(
+                            model.parameters(), max_norm=10.0
+                        )  # clip gradients
                         scaler.step(optimizer)  # optimizer.step
                         scaler.update()
                         optimizer.zero_grad()
-                        
+
                         ema.update(model)
                         last_opt_step = ni
 
                     wandb.log({f"NODE_{proxy_single_client}_LOSS": loss.item()})
-                        
+
                 scheduler.step()
-                ema.update_attr(model, include=['yaml', 'nc', 'hyp', 'names', 'stride', 'class_weights'])
-            
+                ema.update_attr(
+                    model,
+                    include=["yaml", "nc", "hyp", "names", "stride", "class_weights"],
+                )
+
                 results[proxy_single_client], maps, _ = validate.run(
                     data_dict,
                     batch_size=args.batch_size,
@@ -422,45 +538,74 @@ def main(args):
                     plots=False,
                     compute_loss=compute_loss,
                 )
-                
-                
+
                 # log
-                wandb.log({f"CLIENTS_{proxy_single_client}_INNER_RESULTS_{results_name[3]}": results[proxy_single_client][3]})
+                wandb.log(
+                    {
+                        f"CLIENTS_{proxy_single_client}_INNER_RESULTS_{results_name[3]}": results[
+                            proxy_single_client
+                        ][
+                            3
+                        ]
+                    }
+                )
                 for i in range(len(args.clients)):
-                    wandb.log({f"CLIENTS_{proxy_single_client}_INNER_CLASS_{args.clients[i]}": maps[args.clients[i]]})
+                    wandb.log(
+                        {
+                            f"CLIENTS_{proxy_single_client}_INNER_CLASS_{args.clients[i]}": maps[
+                                args.clients[i]
+                            ]
+                        }
+                    )
             # import pdb; pdb.set_trace()
             # node_grad.append([i.cpu() for i in grad_sum])
-            
+
             # log
-            wandb.log({f"CLIENTS_{proxy_single_client}_RESULTS_{results_name[3]}": results[proxy_single_client][3]})
+            wandb.log(
+                {
+                    f"CLIENTS_{proxy_single_client}_RESULTS_{results_name[3]}": results[
+                        proxy_single_client
+                    ][3]
+                }
+            )
 
             for i in range(len(args.clients)):
-                wandb.log({f"CLIENTS_{proxy_single_client}_CLASS_{args.clients[i]}": maps[args.clients[i]]})
+                wandb.log(
+                    {
+                        f"CLIENTS_{proxy_single_client}_CLASS_{args.clients[i]}": maps[
+                            args.clients[i]
+                        ]
+                    }
+                )
 
             # grad
             node_grad.append(single_node_grad)
         # import pdb; pdb.set_trace()
-            
+
         """ ---- model average and eval ---- """
-        if args. grad_surgery:
+        if args.grad_surgery:
             if args.central:
                 optimizer_avg.zero_grad()
                 node_grad.append(server_grad)
-                node_grad = [torch.from_numpy(np.sum(grad, axis=0)) for grad in node_grad]
+                node_grad = [
+                    torch.from_numpy(np.sum(grad, axis=0)) for grad in node_grad
+                ]
                 flatten_grad = torch.cat([g.flatten() for g in node_grad])
                 merged_grads = project_conflicting(flatten_grad)
                 unflatten_grads = unflatten_grad(merged_grads, model_shape)
 
                 idx = 0
                 for group in optimizer_avg.param_groups:
-                    for p in group['params']:
+                    for p in group["params"]:
                         # if p.grad is None: continue
                         p.grad = unflatten_grads[idx]
                         idx += 1
                 optimizer_avg.step()
             else:
                 optimizer_avg.zero_grad()
-                node_grad = [torch.from_numpy(np.sum(grad, axis=0)) for grad in node_grad]
+                node_grad = [
+                    torch.from_numpy(np.sum(grad, axis=0)) for grad in node_grad
+                ]
                 # import pdb; pdb.set_trace()
                 flatten_grad = torch.cat([g.flatten() for g in node_grad])
                 merged_grads = project_conflicting(node_grad)
@@ -468,18 +613,27 @@ def main(args):
 
                 idx = 0
                 for group in optimizer_avg.param_groups:
-                    for p in group['params']:
+                    for p in group["params"]:
                         # if p.grad is None: continue
                         p.grad = unflatten_grads[idx]
                         idx += 1
                 optimizer_avg.step()
         else:
             if args.central:
-                average_model(args, model_avg, model_all, model_server, server_weight, clients_weights)
+                average_model(
+                    args,
+                    model_avg,
+                    model_all,
+                    model_server,
+                    server_weight,
+                    clients_weights,
+                )
             else:
-                weight=None
-                average_model(args, model_avg, model_all, model_server, weight, clients_weights)
-        
+                weight = None
+                average_model(
+                    args, model_avg, model_all, model_server, weight, clients_weights
+                )
+
         # then evaluate server
         model_avg.to(device)
         compute_loss = ComputeLoss(model_avg)
@@ -494,11 +648,20 @@ def main(args):
             plots=False,
             compute_loss=compute_loss,
         )
-        
+
+        # import pdb
+        # pdb.set_trace()
+
         # for i in range(len(results_name)):
         wandb.log({f"SERVER_RESULTS_{results_name[3]}": server_results[3]})
         for i in range(len(args.clients)):
-            wandb.log({f"SERVER_CLIENTS_{i}_CLASS_{args.clients[i]}": server_maps[args.clients[i]]})
+            wandb.log(
+                {
+                    f"SERVER_CLIENTS_{i}_CLASS_{args.clients[i]}": server_maps[
+                        args.clients[i]
+                    ]
+                }
+            )
 
     print("================ end training ================ ")
     ## model save
@@ -521,7 +684,7 @@ if __name__ == "__main__":
         default="per_class",
         help="Node; Which dataset.",
     )
-    
+
     parser.add_argument(
         "--optimizer_type",
         default="SGD",
@@ -590,10 +753,7 @@ if __name__ == "__main__":
         "--server_local_epoch", default=1, type=int, help="Local training epoch in FL"
     )
     parser.add_argument(
-        "--epoch",
-        default=50,
-        type=int,
-        help="Total communication rounds",
+        "--epoch", default=50, type=int, help="Total communication rounds",
     )
     parser.add_argument(
         "--clients", nargs="+", default=[56], help="56: chair, 60: table"
@@ -606,9 +766,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--grad_surgery",
-        default=False,
-        help="whether applying gradient surgery",
+        "--grad_surgery", default=False, help="whether applying gradient surgery",
     )
 
     ## YOLO hyperparameters
