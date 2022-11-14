@@ -10,7 +10,7 @@ import torch
 
 from fedutils.scheduler import setup_scheduler
 from fedmodels.yolov5.utils.loss import ComputeLoss
-from fedmodels.yolov5.utils.torch_utils import smart_optimizer
+from fedmodels.yolov5.utils.torch_utils import smart_optimizer, ModelEMA
 from torch.optim import lr_scheduler
 
 from torch import optim as optim
@@ -282,10 +282,12 @@ def partial_client_selection(args, model, hyp):
     model_all = {}
     optimizer_all = {}
     scheduler_all = {}
+    ema_all = {}
 
     for proxy_single_client in range(len(args.clients)):
         model_all[proxy_single_client] = deepcopy(model).cpu()
-        
+        ema_all[proxy_single_client] = ModelEMA(deepcopy(model))
+
         # Optimizer
         nbs = 64  # nominal batch size
         accumulate = max(round(nbs / args.batch_size), 1)  # accumulate loss before optimizing
@@ -295,7 +297,7 @@ def partial_client_selection(args, model, hyp):
         lf = lambda x: (1 - x / args.local_epoch) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
         scheduler_all[proxy_single_client] = lr_scheduler.LambdaLR(optimizer_all[proxy_single_client], lr_lambda=lf)
 
-    return model_all, optimizer_all, scheduler_all
+    return model_all, optimizer_all, scheduler_all, ema_all
 
 
 def average_model(args, model_avg, model_all, model_server, server_weight, clients_weights):
@@ -305,6 +307,7 @@ def average_model(args, model_avg, model_all, model_server, server_weight, clien
     # for name, value in model_state_dict.items():
     for name, param in params.items():
         for client in range(len(args.clients)):
+            # import pdb; pdb.set_trace()
 
             single_client_weight = clients_weights[client]
             single_client_weight = torch.from_numpy(
