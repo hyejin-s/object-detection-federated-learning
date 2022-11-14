@@ -29,11 +29,7 @@ def download_model_checkpoint(opt, experiment):
         logger.error(f"COMET ERROR: No checkpoints found for model name : {model_name}")
         return
 
-    model_asset_list = sorted(
-        model_asset_list,
-        key=lambda x: x["step"],
-        reverse=True,
-    )
+    model_asset_list = sorted(model_asset_list, key=lambda x: x["step"], reverse=True,)
     logged_checkpoint_map = {
         asset["fileName"]: asset["assetId"] for asset in model_asset_list
     }

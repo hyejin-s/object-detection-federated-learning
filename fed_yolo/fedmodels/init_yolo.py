@@ -25,6 +25,7 @@ except ImportError:
         "Install Weights & Biases for experiment logging via 'pip install wandb' (recommended)"
     )
 
+
 def init_yolo(args, device="cpu"):
     # init settings
     args.yolo_hyp = args.yolo_hyp or (

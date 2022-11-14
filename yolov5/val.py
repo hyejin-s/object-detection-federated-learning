@@ -355,10 +355,7 @@ def run(
                 )
                 ap50, ap = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
                 mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
-                with open(
-                    "map_list.txt",
-                    "a",
-                ) as f:
+                with open("map_list.txt", "a",) as f:
                     f.write(f"{paths} {map50} {map}\n")
 
             # Save/log

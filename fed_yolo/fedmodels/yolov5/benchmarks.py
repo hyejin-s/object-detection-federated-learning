@@ -65,12 +65,9 @@ def run(
     model_type = type(
         attempt_load(weights, fuse=False)
     )  # DetectionModel, SegmentationModel, etc.
-    for i, (
-        name,
-        f,
-        suffix,
-        cpu,
-        gpu,
+    for (
+        i,
+        (name, f, suffix, cpu, gpu,),
     ) in export.export_formats().iterrows():  # index, (name, file, suffix, CPU, GPU)
         try:
             assert i not in (
@@ -177,11 +174,9 @@ def test(
 ):
     y, t = [], time.time()
     device = select_device(device)
-    for i, (
-        name,
-        f,
-        suffix,
-        gpu,
+    for (
+        i,
+        (name, f, suffix, gpu,),
     ) in export.export_formats().iterrows():  # index, (name, file, suffix, gpu-capable)
         try:
             w = (

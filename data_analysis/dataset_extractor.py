@@ -91,10 +91,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--save_dir",
-        help="save root",
-        type=str,
-        default="/hdd/hdd3/coco_custom/",
+        "--save_dir", help="save root", type=str, default="/hdd/hdd3/coco_custom/",
     )
     parser.add_argument("--data_dir", type=str, default="/hdd/hdd3/coco/")
     parser.add_argument(

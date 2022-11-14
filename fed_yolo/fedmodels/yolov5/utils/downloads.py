@@ -81,9 +81,10 @@ def attempt_download(file, repo="ultralytics/yolov5", release="v6.2"):
         response = requests.get(
             f"https://api.github.com/repos/{repository}/releases/{version}"
         ).json()  # github api
-        return response["tag_name"], [
-            x["name"] for x in response["assets"]
-        ]  # tag, assets
+        return (
+            response["tag_name"],
+            [x["name"] for x in response["assets"]],
+        )  # tag, assets
 
     file = Path(str(file).strip().replace("'", ""))
     if not file.exists():

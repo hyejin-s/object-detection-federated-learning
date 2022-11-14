@@ -78,9 +78,11 @@ for orientation in ExifTags.TAGS.keys():
     if ExifTags.TAGS[orientation] == "Orientation":
         break
 
+
 def make_divisible(x, divisor):
     # Returns x evenly divisible by divisor
     return math.ceil(x / divisor) * divisor
+
 
 def img2label_paths(img_paths):
     # Define label paths as a function of image paths
@@ -89,6 +91,7 @@ def img2label_paths(img_paths):
         os.sep + "labels" + os.sep,
     )  # /images/, /labels/ substrings
     return [sb.join(x.rsplit(sa, 1)).rsplit(".", 1)[0] + ".txt" for x in img_paths]
+
 
 def create_dataloader(
     path,
@@ -157,6 +160,7 @@ def create_dataloader(
         dataset,
     )
 
+
 class LoadImagesAndLabels(Dataset):
     # YOLOv5 train_loader/val_loader, loads images and labels for training and validation
     cache_version = 0.6  # dataset labels *.cache version
@@ -224,8 +228,8 @@ class LoadImagesAndLabels(Dataset):
             assert self.im_files, f"{prefix}No images found"
         except Exception as e:
             raise Exception(f"{prefix}Error loading data from {path}: {e}\n{HELP_URL}")
-        
-           # dataidxs
+
+        # dataidxs
         if dataidxs is not None:
             self.im_files = [self.im_files[i - 1] for i in dataidxs]
             self.im_files = sorted(self.im_files)
@@ -746,6 +750,7 @@ class LoadImagesAndLabels(Dataset):
 
         return torch.stack(im4, 0), torch.cat(label4, 0), path4, shapes4
 
+
 def partition_data(data_path, partition, n_nets):
     if os.path.isfile(data_path):
         with open(data_path) as f:
@@ -764,6 +769,7 @@ def partition_data(data_path, partition, n_nets):
         net_dataidx_map = non_iid_coco(label_path, n_nets)
 
     return net_dataidx_map
+
 
 def non_iid_coco(label_path, client_num):
     res_bin = {}
@@ -807,7 +813,10 @@ def non_iid_coco(label_path, client_num):
     res_bin[b + 1] = np.array(list(fs_id))
     return res_bin
 
-def load_partition_data_custom(args, hyp, model, data_dict, batch_size, img_size, clients, shuffle):
+
+def load_partition_data_custom(
+    args, hyp, model, data_dict, batch_size, img_size, clients, shuffle
+):
 
     train_path = os.path.expanduser(data_dict["path"] + data_dict["train"])
     test_path = os.path.expanduser("/hdd/hdd3/coco/images/val2017")
@@ -828,12 +837,14 @@ def load_partition_data_custom(args, hyp, model, data_dict, batch_size, img_size
         rect=True,
         rank=-1,
         pad=0.5,
-        shuffle=shuffle
+        shuffle=shuffle,
     )[0]
 
     if args.dataset == "per_class":
         for client_idx in range(len(clients)):
-            train_path = data_dict["path"] + f"/node_{client_idx+1}_class_{clients[client_idx]}"
+            train_path = (
+                data_dict["path"] + f"/node_{client_idx+1}_class_{clients[client_idx]}"
+            )
             dataloader, dataset = create_dataloader(
                 train_path,
                 imgsz,
@@ -842,7 +853,7 @@ def load_partition_data_custom(args, hyp, model, data_dict, batch_size, img_size
                 args,
                 hyp=hyp,
                 rect=True,
-                shuffle=shuffle
+                shuffle=shuffle,
             )
 
             train_dataset_dict[client_idx] = dataset
@@ -879,6 +890,7 @@ def load_partition_data_custom(args, hyp, model, data_dict, batch_size, img_size
         test_loader,
     )
 
+
 def load_server_data(args, hyp, model, data_dict, batch_size, img_size, shuffle):
 
     train_path = os.path.expanduser(os.path.join(data_dict["path"], "server"))
@@ -888,14 +900,7 @@ def load_server_data(args, hyp, model, data_dict, batch_size, img_size, shuffle)
     imgsz = check_img_size(img_size, gs, floor=gs * 2)
 
     train_loader, train_dataset = create_dataloader(
-        train_path,
-        imgsz,
-        batch_size,
-        gs,
-        args,
-        hyp=hyp,
-        rect=True,
-        shuffle=shuffle
+        train_path, imgsz, batch_size, gs, args, hyp=hyp, rect=True, shuffle=shuffle
     )
 
     test_loader = create_dataloader(
@@ -907,7 +912,7 @@ def load_server_data(args, hyp, model, data_dict, batch_size, img_size, shuffle)
         rect=True,
         rank=-1,
         pad=0.5,
-        shuffle=shuffle
+        shuffle=shuffle,
     )[0]
 
     return (
