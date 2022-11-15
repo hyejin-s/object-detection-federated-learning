@@ -313,49 +313,37 @@ def partial_client_selection(args, model, hyp):
 
 
 def average_model(
-    args, model_avg, model_all, model_server, server_weight, clients_weights
+    args, model_avg, model_all, model_server, server_weight, clients_weights, device
 ):
     print("---- calculate the model avg ----")
-    params = dict(model_avg.named_parameters())
-
-    # for name, value in model_state_dict.items():
-    for name, param in params.items():
-        for client in range(len(args.clients)):
-            # import pdb; pdb.set_trace()
-
-            single_client_weight = clients_weights[client]
-            single_client_weight = torch.from_numpy(
-                np.array(single_client_weight)
-            ).float()
-
-            if client == 0:
-                tmp_param_data = (
-                    dict(model_all[client].named_parameters())[name].data
-                    * single_client_weight
-                )
-            else:
-                tmp_param_data = (
-                    tmp_param_data
-                    + dict(model_all[client].named_parameters())[name].data
-                    * single_client_weight
-                )
-        if args.central:
-            server_weight = torch.from_numpy(np.array(server_weight)).float()
-            tmp_param_data = (
-                tmp_param_data
-                + dict(model_server.named_parameters())[name].data * server_weight
-            )
-
-        params[name].data.copy_(tmp_param_data)
-
-    print("---- update each client model parameters ----")
+    global_params = model_avg.state_dict()
 
     for client in range(len(args.clients)):
-        tmp_params = dict(model_all[client].named_parameters())
-        for name, param in params.items():
-            tmp_params[name].data.copy_(param.data)
+        single_client_weight = clients_weights[client]
+        single_client_weight = torch.from_numpy(np.array(single_client_weight)).float()
+        net_params = model_all[client].state_dict()
+        if client == 0:
+            for key in net_params:
+                global_params[key] = net_params[key] * single_client_weight
+        else:
+            for key in net_params:
+                global_params[key] += net_params[key] * single_client_weight
 
-    if args.central:
-        tmp_params = dict(model_server.named_parameters())
-        for name, param in params.items():
-            tmp_params[name].data.copy_(param.data)
+    model_avg.load_state_dict(global_params)
+    model_avg.to(device)
+
+    # if args.central:
+    #     server_weight = torch.from_numpy(np.array(server_weight)).float()
+    #     tmp_param_data = (
+    #         tmp_param_data
+    #         + dict(model_server.named_parameters())[name].data * server_weight
+    #     )
+
+    print("---- update each client model parameters ----")
+    for client in range(len(args.clients)):
+        model_all[client].load_state_dict(global_params)
+
+    # if args.central:
+    #     tmp_params = dict(model_server.named_parameters())
+    #     for name, param in params.items():
+    #         tmp_params[name].data.copy_(param.data)

@@ -406,12 +406,12 @@ def main(args):
             train_loader = train_data_loader_dict[proxy_single_client]
 
             model = model_all[proxy_single_client].to(device)
-            import pdb
+            # import pdb
 
-            pdb.set_trace()
+            # pdb.set_trace()
             optimizer = optimizer_all[proxy_single_client]
             scheduler = scheduler_all[proxy_single_client]
-            ema = ema_all[proxy_single_client]
+            # ema = ema_all[proxy_single_client]
             compute_loss = ComputeLoss(model)
 
             nb = len(train_loader)  # number of batches
@@ -435,7 +435,12 @@ def main(args):
 
                 for (
                     step,
-                    (imgs, targets, paths, _,),
+                    (
+                        imgs,
+                        targets,
+                        paths,
+                        _,
+                    ),
                 ) in (
                     pbar
                 ):  # batch -------------------------------------------------------------
@@ -516,23 +521,23 @@ def main(args):
                         scaler.update()
                         optimizer.zero_grad()
 
-                        ema.update(model)
+                        # ema.update(model)
                         last_opt_step = ni
 
                     wandb.log({f"NODE_{proxy_single_client}_LOSS": loss.item()})
 
                 scheduler.step()
-                ema.update_attr(
-                    model,
-                    include=["yaml", "nc", "hyp", "names", "stride", "class_weights"],
-                )
+                # ema.update_attr(
+                #     model,
+                #     include=["yaml", "nc", "hyp", "names", "stride", "class_weights"],
+                # )
 
                 results[proxy_single_client], maps, _ = validate.run(
                     data_dict,
                     batch_size=args.batch_size,
                     imgsz=args.img_size,
                     half=True,
-                    model=ema.ema,
+                    model=model,  # ema.ema,
                     single_cls=False,
                     dataloader=test_loader,
                     plots=False,
@@ -627,14 +632,22 @@ def main(args):
                     model_server,
                     server_weight,
                     clients_weights,
+                    device,
                 )
             else:
                 weight = None
                 average_model(
-                    args, model_avg, model_all, model_server, weight, clients_weights
+                    args,
+                    model_avg,
+                    model_all,
+                    model_server,
+                    weight,
+                    clients_weights,
+                    device,
                 )
 
         # then evaluate server
+        print("avg_model")
         model_avg.to(device)
         compute_loss = ComputeLoss(model_avg)
         server_results, server_maps, _ = validate.run(
@@ -740,7 +753,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--learning_rate",
-        default=1e-6,
+        default=1e-4,
         type=float,
         help="The initial learning rate for SGD.",
     )
@@ -753,7 +766,10 @@ if __name__ == "__main__":
         "--server_local_epoch", default=1, type=int, help="Local training epoch in FL"
     )
     parser.add_argument(
-        "--epoch", default=50, type=int, help="Total communication rounds",
+        "--epoch",
+        default=50,
+        type=int,
+        help="Total communication rounds",
     )
     parser.add_argument(
         "--clients", nargs="+", default=[56], help="56: chair, 60: table"
@@ -766,7 +782,9 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--grad_surgery", default=False, help="whether applying gradient surgery",
+        "--grad_surgery",
+        default=False,
+        help="whether applying gradient surgery",
     )
 
     ## YOLO hyperparameters
