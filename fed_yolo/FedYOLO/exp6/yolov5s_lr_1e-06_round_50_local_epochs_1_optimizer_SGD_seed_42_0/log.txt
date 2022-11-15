@@ -1,0 +1,61 @@
+================ FL train with total model parameters: 7.2M  ================
+++++++++++++++++ Other Train related parameters ++++++++++++++++ 
+           artifact_alias: latest                        
+               batch_size: 256                           
+            bbox_interval: -1                            
+                   bucket:                               
+                    cache: None                          
+                  central: False                         
+                      cfg: fedmodels/yolov5/models/yolov5s.yaml
+                  clients: [56, 60]                      
+                   cos_lr: False                         
+                     data: data/coco_custom.yaml         
+                  dataset: per_class                     
+               decay_type: step                          
+                   device:                               
+                   entity: None                          
+                    epoch: 50                            
+                   evolve: None                          
+                 exist_ok: False                         
+                   freeze: [0]                           
+                grad_clip: True                          
+             grad_surgery: False                         
+                      hyp: fedmodels/yolov5/data/hyps/hyp.scratch-low.yaml
+            image_weights: False                         
+                 img_size: 640                           
+                    imgsz: 640                           
+          label_smoothing: 0.0                           
+            learning_rate: 1e-06                         
+              local_epoch: 1                             
+               local_rank: -1                            
+            max_grad_norm: 1.0                           
+              multi_scale: False                         
+                     name: exp                           
+                 net_name: yolov5s                       
+             noautoanchor: False                         
+                  noplots: False                         
+                   nosave: False                         
+                    noval: False                         
+              num_workers: 8                             
+                optimizer: SGD                           
+           optimizer_type: SGD                           
+                 patience: 100                           
+                  project: FedYOLO                       
+                     quad: False                         
+                     rect: False                         
+                   resume: False                         
+                 save_dir: FedYOLO/exp6                  
+              save_period: -1                            
+                     seed: 42                            
+       server_local_epoch: 1                             
+                  shuffle: True                          
+               single_cls: False                         
+                step_size: 30                            
+                  sync_bn: False                         
+           upload_dataset: False                         
+                    wandb: True                          
+             warmup_steps: 100                           
+             weight_decay: 0                             
+                  weights: /hdd/hdd3/coco_fl/best.pt     
+                  workers: 8                             
+++++++++++++++++  End of show parameters ++++++++++++++++ 

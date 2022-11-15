@@ -1,0 +1,94 @@
+net_name: yolov5s
+dataset: per_class
+optimizer_type: SGD
+num_workers: 8
+weight_decay: 0
+grad_clip: true
+img_size: 640
+batch_size: 32
+seed: 42
+decay_type: step
+warmup_steps: 100
+step_size: 30
+max_grad_norm: 1.0
+learning_rate: 0.0001
+local_epoch: 1
+server_local_epoch: 1
+epoch: 50
+clients:
+- 56
+- 60
+central: false
+grad_surgery: false
+yolo_cfg: fedmodels/yolov5/models/yolov5s.yaml
+data_conf: data/coco_custom.yaml
+yolo_hyp: fedmodels/yolov5/data/hyps/hyp.scratch-low.yaml
+shuffle: true
+save_dir: FedYOLO/exp5
+wandb: true
+project: FedYOLO
+weights: /hdd/hdd3/coco_fl/best.pt
+cfg: fedmodels/yolov5/models/yolov5s.yaml
+data: data/coco_custom.yaml
+hyp:
+  lr0: 0.0005
+  lrf: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 3.0
+  warmup_momentum: 0.8
+  warmup_bias_lr: 0.01
+  box: 0.05
+  cls: 0.5
+  cls_pw: 1.0
+  obj: 1.0
+  obj_pw: 1.0
+  iou_t: 0.2
+  anchor_t: 4.0
+  fl_gamma: 0.0
+  hsv_h: 0.015
+  hsv_s: 0.7
+  hsv_v: 0.4
+  degrees: 0.0
+  translate: 0.1
+  scale: 0.5
+  shear: 0.0
+  perspective: 0.0
+  flipud: 0.0
+  fliplr: 0.5
+  mosaic: 1.0
+  mixup: 0.0
+  copy_paste: 0.0
+  label_smoothing: 0.0
+epochs: 1
+imgsz: 640
+rect: false
+resume: false
+nosave: false
+noval: false
+noautoanchor: false
+noplots: false
+evolve: null
+bucket: ''
+cache: null
+image_weights: false
+device: ''
+multi_scale: false
+single_cls: false
+optimizer: SGD
+sync_bn: false
+workers: 8
+name: exp
+exist_ok: false
+quad: false
+cos_lr: false
+label_smoothing: 0.0
+patience: 100
+freeze:
+- 0
+save_period: -1
+local_rank: -1
+entity: null
+upload_dataset: false
+bbox_interval: 1
+artifact_alias: latest

@@ -828,7 +828,7 @@ def load_partition_data_custom(args, hyp, model, data_dict, batch_size, img_size
         rect=True,
         rank=-1,
         pad=0.5,
-        shuffle=shuffle
+        shuffle=shuffle,
     )[0]
 
     if args.dataset == "per_class":
@@ -876,7 +876,7 @@ def load_partition_data_custom(args, hyp, model, data_dict, batch_size, img_size
         train_dataset_dict,
         train_data_num_dict,
         train_data_loader_dict,
-        test_loader,
+        test_loader
     )
 
 def load_server_data(args, hyp, model, data_dict, batch_size, img_size, shuffle):
@@ -898,20 +898,7 @@ def load_server_data(args, hyp, model, data_dict, batch_size, img_size, shuffle)
         shuffle=shuffle
     )
 
-    test_loader = create_dataloader(
-        test_path,
-        imgsz,
-        batch_size,
-        gs,
-        hyp=hyp,
-        rect=True,
-        rank=-1,
-        pad=0.5,
-        shuffle=shuffle
-    )[0]
-
     return (
         train_loader,
         train_dataset,
-        test_loader,
     )

@@ -27,32 +27,32 @@ except ImportError:
 
 def init_yolo(args, device="cpu"):
     # init settings
-    args.yolo_hyp = args.yolo_hyp or (
+    args.hyp = args.hyp or (
         "hyp.finetune.yaml" if args.weights else "hyp.scratch.yaml"
     )
-    args.data_conf, args.yolo_cfg, args.yolo_hyp = (
-        check_file(args.data_conf),
-        check_file(args.yolo_cfg),
-        check_file(args.yolo_hyp),
+    args.data, args.cfg, args.hyp = (
+        check_file(args.data),
+        check_file(args.cfg),
+        check_file(args.hyp),
     )  # check files
-    assert len(args.yolo_cfg) or len(
+    assert len(args.cfg) or len(
         args.weights
-    ), "either yolo_cfg or weights must be specified"
+    ), "either cfg or weights must be specified"
 
     # Hyperparameters
-    with open(args.yolo_hyp) as f:
+    with open(args.hyp) as f:
         hyp = yaml.load(f, Loader=yaml.FullLoader)  # load hyps
         if "box" not in hyp:
             warn(
                 'Compatibility: %s missing "box" which was renamed from "giou" in %s'
-                % (args.yolo_hyp, "https://github.com/ultralytics/yolov5/pull/1120")
+                % (args.hyp, "https://github.com/ultralytics/yolov5/pull/1120")
             )
             hyp["box"] = hyp.pop("giou")
 
     total_batch_size, weights = (args.batch_size, args.weights)
 
     # Configure
-    with open(args.data_conf) as f:
+    with open(args.data) as f:
         data_dict = yaml.load(f, Loader=yaml.FullLoader)  # data dict
     nc, names = (int(data_dict["nc"]), data_dict["names"])  # number classes, names
 
@@ -64,11 +64,11 @@ def init_yolo(args, device="cpu"):
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
         if hyp.get("anchors"):
             ckpt["model"].yaml["anchors"] = round(hyp["anchors"])  # force autoanchor
-        model = YOLOv5(args.yolo_cfg or ckpt["model"].yaml, ch=3, nc=nc).to(
+        model = YOLOv5(args.cfg or ckpt["model"].yaml, ch=3, nc=nc).to(
             device
         )  # create
         exclude = (
-            ["anchor"] if args.yolo_cfg or hyp.get("anchors") else []
+            ["anchor"] if args.cfg or hyp.get("anchors") else []
         )  # exclude keys
         state_dict = ckpt["model"].float().state_dict()  # to FP32
         state_dict = intersect_dicts(
@@ -80,7 +80,7 @@ def init_yolo(args, device="cpu"):
             % (len(state_dict), len(model.state_dict()), weights)
         )  # report
     else:
-        model = YOLOv5(args.yolo_cfg, ch=3, nc=nc).to(device)  # create
+        model = YOLOv5(args.cfg, ch=3, nc=nc).to(device)  # create
 
     # print(model)
     hyp["cls"] *= nc / 80.0
